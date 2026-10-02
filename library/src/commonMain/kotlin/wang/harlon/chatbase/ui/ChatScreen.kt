@@ -62,6 +62,7 @@ data class ChatSuggestion(val label: String, val prompt: String)
  *
  * @param engine 默认正式引擎 [ChatApi]；Demo 可注入 FakeChatEngine。
  * @param persistent Demo/预览可关（纯内存模式）
+ * @param navigationIcon 顶栏左侧图标；null 时为调用 [onBack] 的返回箭头。chat 作为宿主首页时用它放设置入口。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,6 +73,7 @@ fun ChatScreen(
     persistent: Boolean = true,
     suggestions: List<ChatSuggestion> = emptyList(),
     transcriber: VoiceTranscriber? = ChatApi.sharedTranscriber,
+    navigationIcon: (@Composable () -> Unit)? = null,
 ) {
     val store = if (persistent) rememberDefaultChatStore() else remember { InMemoryChatStore() }
     val viewModel: ChatViewModel = viewModel(key = "chat") {
@@ -148,7 +150,7 @@ fun ChatScreen(
                                 )
                             }
                         },
-                        navigationIcon = {
+                        navigationIcon = navigationIcon ?: {
                             IconButton(onClick = onBack) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
