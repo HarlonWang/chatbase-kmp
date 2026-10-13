@@ -60,6 +60,8 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
 
             implementation(libs.coil.compose)
+            // 回复里的 Markdown 图片（生成图）是网络 URL：Coil 3 拉网络图须显式带 fetcher，缺了只会落回链接文字
+            implementation(libs.coil.network.ktor)
             implementation(libs.highlights)
 
             implementation(libs.room.runtime)
