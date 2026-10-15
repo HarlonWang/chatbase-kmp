@@ -360,6 +360,4 @@ private fun MetaCapability(icon: ImageVector, label: String) {
     }
 }
 
-/** 首项顶部大圆角、末项底部大圆角、中间一律小圆角；只有一项时四角全大。 */
-
 private const val LockedAlpha = 0.6f
