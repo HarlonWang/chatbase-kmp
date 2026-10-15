@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -75,6 +74,7 @@ import wang.harlon.chatbase.resources.chat_model_provider
 import wang.harlon.chatbase.resources.chat_model_unlock_dismiss
 import wang.harlon.chatbase.resources.chat_model_unlock_message
 import wang.harlon.chatbase.resources.chat_model_unlock_title
+import wang.harlon.appsettings.ui.SettingsDefaults
 
 /**
  * [ModelPicker] 是否有东西可渲染：顶栏标题槽据此决定放选择器还是回落文字标题。
@@ -243,13 +243,13 @@ private fun ModelPickerContent(
         val group = groups[providerIndex]
         // 各厂商条数不同，切分段时浮层高度会变；动画过渡而不是跳变
         Column(
-            verticalArrangement = Arrangement.spacedBy(ItemGap),
+            verticalArrangement = Arrangement.spacedBy(SettingsDefaults.ItemGap),
             modifier = Modifier.animateContentSize(),
         ) {
             group.forEachIndexed { index, model ->
                 ModelRow(
                     model = model,
-                    shape = groupItemShape(index, group.size),
+                    shape = SettingsDefaults.groupItemShape(index, group.size),
                     selected = model.id == current.id,
                     locked = model.proOnly && !isPro,
                     onClick = { if (model.proOnly && !isPro) onLockedClick(model) else onSelect(model) },
@@ -272,7 +272,7 @@ private fun ModelPickerContent(
 }
 
 /**
- * 一行模型：名称 + 能力位副行。卡片规格镜像宿主 app 的 `SettingsGroup`（chat 是独立 SDK，不能依赖 shared）。
+ * 一行模型：名称 + 能力位副行。连体卡片的圆角规则来自 appsettings-kmp 的 `SettingsDefaults`，与宿主设置页同一套。
  * 档位不逐行标：Pro 用户在标题行看一次徽标，免费用户靠锁定行的锁图标 + 降透明度分辨。
  * 锁定行仍可点（弹说明），所以不走禁用态。
  */
@@ -360,14 +360,4 @@ private fun MetaCapability(icon: ImageVector, label: String) {
     }
 }
 
-/** 首项顶部大圆角、末项底部大圆角、中间一律小圆角；只有一项时四角全大。 */
-private fun groupItemShape(index: Int, count: Int): Shape {
-    val top = if (index == 0) LargeCorner else SmallCorner
-    val bottom = if (index == count - 1) LargeCorner else SmallCorner
-    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
-}
-
-private val LargeCorner = 24.dp
-private val SmallCorner = 6.dp
-private val ItemGap = 4.dp
 private const val LockedAlpha = 0.6f

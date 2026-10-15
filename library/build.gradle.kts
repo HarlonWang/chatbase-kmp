@@ -52,6 +52,8 @@ kotlin {
             implementation(libs.compose.icons.extended)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.components.uiToolingPreview)
+            // 模型列表的连体卡片圆角与宿主设置页同一套规则
+            implementation(libs.appsettings.kmp)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.jetbrains.navigationevent.compose)
 

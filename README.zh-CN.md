@@ -88,6 +88,7 @@ ChatScreen(
 - Android：`./gradlew :library:testAndroidHostTest` 在 Robolectric 下跑 common 与 Android 测试。
 - iOS：Markdown 解析绑 [cmark-gfm](https://github.com/apple/swift-cmark)。`library/native/build-cmark.sh` 首次用 CMake 编出静态库并打进 klib，消费方无需额外动作。
 - App 吃本地源码：若 App 通过 `gradle/composite-substitutions` 支持 composite build，在它的 `local.properties` 加 `chatbase-kmp.dir=<路径>` 即可。
+- 本库自己依赖 `wang.harlon:appsettings-kmp`（模型列表的卡片圆角规则）。本机要吃它的源码时，在本仓 `local.properties` 加 `appsettings-kmp.dir=<路径>`；CI 走 `libs.versions.toml` 的 Maven 版本，发版顺序是 appsettings-kmp 先、本库后。
 
 ## 许可
 
