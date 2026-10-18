@@ -3,7 +3,7 @@ agp = "9.4.1"
 android-compileSdk = "37"
 android-minSdk = "24"
 android-targetSdk = "37"
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 composeMultiplatform = "1.12.1"
 # 独立版本线，不跟 composeMultiplatform 走（该坐标只发 alpha）。必须与 CMP 同代：
 # 落后会在渲染 TextField 时 AbstractMethodError，而编译/单测全绿，只在真机炸
@@ -32,7 +32,7 @@ robolectric = "4.17"
 androidx-test-core = "1.7.0"
 vanniktechMavenPublish = "0.37.0"
 # 设置 UI 基元（卡片组圆角规则）所在的库；改了它必须发版并 bump 这里
-appsettings-kmp = "0.1.0"
+appsettings-kmp = "0.2.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
