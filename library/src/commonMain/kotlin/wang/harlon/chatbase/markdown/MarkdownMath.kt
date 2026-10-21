@@ -35,6 +35,9 @@ private class MathScanner(private val src: String, private val start: Char, priv
     /** 当前所在围栏代码块的开栏串（如 "```"），不在围栏内为 null。 */
     private var fence: String? = null
 
+    /** 开栏行所在的引用块层级；行首 `>` 少于此数即离开了该引用块，围栏随之结束。 */
+    private var fenceQuoteDepth = 0
+
     fun run(): MathExtraction {
         while (pos < src.length) {
             if (atLineStart && handleLineStart()) continue
@@ -61,12 +64,17 @@ private class MathScanner(private val src: String, private val start: Char, priv
     private fun handleLineStart(): Boolean {
         atLineStart = false
         val lineEnd = src.indexOf('\n', pos).let { if (it < 0) src.length else it }
-        val line = stripQuotePrefix(src.substring(pos, lineEnd))
+        val (quoteDepth, line) = stripQuotePrefix(src.substring(pos, lineEnd))
         val run = fenceRun(line)
         val current = fence
         if (current == null) {
             if (run == null || !opensFence(line, run)) return false
             fence = run
+            fenceQuoteDepth = quoteDepth
+        } else if (quoteDepth < fenceQuoteDepth) {
+            // 本行退出了开栏所在的引用块：CommonMark 里围栏随引用块一起结束，本行是块外正文，照常扫公式
+            fence = null
+            return false
         } else if (run != null && run[0] == current[0] && run.length >= current.length && closesFence(line, run)) {
             fence = null
         }
@@ -88,16 +96,21 @@ private class MathScanner(private val src: String, private val start: Char, priv
         return if (end - i >= 3) line.substring(i, end) else null
     }
 
-    /** 引用块里的围栏带 `> ` 前缀（可嵌套），去掉前缀再判围栏，否则引用里的代码块会被当成正文扫公式。 */
-    private fun stripQuotePrefix(line: String): String {
+    /**
+     * 引用块里的围栏带 `> ` 前缀（可嵌套），去掉前缀再判围栏，否则引用里的代码块会被当成正文扫公式。
+     * 返回剥掉的引用层级与剩余内容。
+     */
+    private fun stripQuotePrefix(line: String): Pair<Int, String> {
         var rest = line
+        var depth = 0
         while (true) {
             var i = 0
             while (i < rest.length && i < 3 && rest[i] == ' ') i++
-            if (i >= rest.length || rest[i] != '>') return rest
+            if (i >= rest.length || rest[i] != '>') return depth to rest
             i++
             if (i < rest.length && rest[i] == ' ') i++
             rest = rest.substring(i)
+            depth++
         }
     }
 

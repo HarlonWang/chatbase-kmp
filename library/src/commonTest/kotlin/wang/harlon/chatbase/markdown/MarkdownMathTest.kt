@@ -136,6 +136,19 @@ class MarkdownMathTest {
         )
     }
 
+    /** 引用块里未闭合的围栏随引用块一起结束，块外正文的公式照常抽出。 */
+    @Test
+    fun unclosed_fence_ends_with_its_blockquote() {
+        val blocks = parse("> ```\n> \$\$ x\n\n后文 \$y\$")
+        assertEquals(
+            listOf(
+                MdBlock.Quote(listOf(MdBlock.CodeBlock("\$\$ x", ""))),
+                MdBlock.Paragraph(listOf(text("后文 "), inlineMath("y"))),
+            ),
+            blocks,
+        )
+    }
+
     /** 公式不跨段：未闭合的 `$$` 不能和几段之后的 `$$` 配对，否则中间的段落全被吞掉。 */
     @Test
     fun display_math_does_not_cross_blank_line() {
