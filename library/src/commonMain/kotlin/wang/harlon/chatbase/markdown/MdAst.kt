@@ -55,7 +55,7 @@ sealed interface MdInline {
 fun parseMarkdown(markdown: String): MdDocument {
     val extraction = extractMath(markdown)
     if (extraction.spans.isEmpty()) return parseMarkdownDialect(markdown)
-    return restoreMath(parseMarkdownDialect(extraction.markdown), extraction.spans)
+    return restoreMath(parseMarkdownDialect(extraction.markdown), extraction)
 }
 
 /** 平台方言解析器：Android 映射自 commonmark-java，iOS 映射自 cmark-gfm，只认 CommonMark + GFM 表格。 */

@@ -99,6 +99,21 @@ class MarkdownMathTest {
         assertEquals(listOf<MdBlock>(MdBlock.CodeBlock("echo \$HOME and \$PATH", "bash")), blocks)
     }
 
+    /** CommonMark：闭栏行的围栏串后只能是空白，"``` text" 是代码内容，围栏要到真正的闭栏才结束。 */
+    @Test
+    fun fence_line_with_trailing_text_does_not_close_fence() {
+        val blocks = parse("```\na\n``` not closing\n```\n\n后文 \$x\$")
+        assertEquals(MdBlock.CodeBlock("a\n``` not closing", ""), blocks[0])
+        assertEquals(MdBlock.Paragraph(listOf(text("后文 "), inlineMath("x"))), blocks[1])
+    }
+
+    /** 源文本里本来就有占位符同形的私用区序列时，不能被误当占位符替换成公式。 */
+    @Test
+    fun literal_private_use_sequence_is_not_mistaken_for_placeholder() {
+        val literal = "0"
+        assertEquals(listOf(text("前 $literal 后 "), inlineMath("y")), paragraph("前 $literal 后 \$y\$"))
+    }
+
     @Test
     fun inline_code_is_untouched() {
         assertEquals(

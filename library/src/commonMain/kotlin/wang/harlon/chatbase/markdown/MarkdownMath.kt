@@ -9,21 +9,24 @@ package wang.harlon.chatbase.markdown
  */
 internal class MathSpan(val latex: String, val display: Boolean, val source: String)
 
-internal class MathExtraction(val markdown: String, val spans: List<MathSpan>)
+/**
+ * 抽出结果。[placeholder] 是本次使用的占位符模式：占位符由一对私用区字符夹一个序号构成，
+ * 两端方言解析器都会原样当文本透传；字符对按源文本动态挑选，源文本里本来就有的同形序列不会被误当占位符。
+ */
+internal class MathExtraction(val markdown: String, val spans: List<MathSpan>, val placeholder: Regex?)
 
-private const val PLACEHOLDER_START = '\uE000'
-private const val PLACEHOLDER_END = '\uE001'
-private val placeholderRegex = Regex("$PLACEHOLDER_START(\\d+)$PLACEHOLDER_END")
-
-/** 占位符只含私用区字符和数字，两端方言解析器都会原样当文本透传，不会被当成语法。 */
-private fun placeholder(index: Int): String = "$PLACEHOLDER_START$index$PLACEHOLDER_END"
+/** 候选的占位符字符对，全部在 Unicode 私用区；逐对挑第一对源文本里都不含的。 */
+private val placeholderCandidates = listOf('\uE000' to '\uE001', '\uE010' to '\uE011', '\uF8F0' to '\uF8F1')
 
 internal fun extractMath(markdown: String): MathExtraction {
-    if (markdown.indexOf('$') < 0 && markdown.indexOf('\\') < 0) return MathExtraction(markdown, emptyList())
-    return MathScanner(markdown).run()
+    if (markdown.indexOf('$') < 0 && markdown.indexOf('\\') < 0) return MathExtraction(markdown, emptyList(), null)
+    val (start, end) = placeholderCandidates.firstOrNull { (s, e) -> markdown.indexOf(s) < 0 && markdown.indexOf(e) < 0 }
+        // 三对都撞上几乎不可能；真撞上就放弃抽公式，按接入前的行为原样显示
+        ?: return MathExtraction(markdown, emptyList(), null)
+    return MathScanner(markdown, start, end).run()
 }
 
-private class MathScanner(private val src: String) {
+private class MathScanner(private val src: String, private val start: Char, private val end: Char) {
     private val out = StringBuilder(src.length)
     private val spans = ArrayList<MathSpan>()
     private var pos = 0
@@ -50,19 +53,21 @@ private class MathScanner(private val src: String) {
                 }
             }
         }
-        return MathExtraction(out.toString(), spans)
+        val placeholder = if (spans.isEmpty()) null else Regex("$start(\\d+)$end")
+        return MathExtraction(out.toString(), spans, placeholder)
     }
 
     /** 行首：维护围栏代码块状态；在围栏内整行原样复制。返回 true 表示已消费整行。 */
     private fun handleLineStart(): Boolean {
         atLineStart = false
         val lineEnd = src.indexOf('\n', pos).let { if (it < 0) src.length else it }
-        val run = fenceRun(src.substring(pos, lineEnd))
+        val line = src.substring(pos, lineEnd)
+        val run = fenceRun(line)
         val current = fence
         if (current == null) {
             if (run == null) return false
             fence = run
-        } else if (run != null && run[0] == current[0] && run.length >= current.length) {
+        } else if (run != null && run[0] == current[0] && run.length >= current.length && closesFence(line, run)) {
             fence = null
         }
         out.append(src, pos, lineEnd)
@@ -81,6 +86,12 @@ private class MathScanner(private val src: String) {
         var end = i
         while (end < line.length && line[end] == ch) end++
         return if (end - i >= 3) line.substring(i, end) else null
+    }
+
+    /** CommonMark：闭栏行的围栏串之后只能是空白，"``` text" 这种是代码内容不是闭栏。 */
+    private fun closesFence(line: String, run: String): Boolean {
+        val after = line.indexOf(run) + run.length
+        return line.substring(after).isBlank()
     }
 
     private fun handleBackslash() {
@@ -166,7 +177,7 @@ private class MathScanner(private val src: String) {
         latex.any { it in MATH_HINT_CHARS } || latex.none { it.isWhitespace() }
 
     private fun emit(latex: String, display: Boolean, source: String) {
-        out.append(placeholder(spans.size))
+        out.append(start).append(spans.size).append(end)
         spans.add(MathSpan(latex.trim(), display, source))
     }
 
@@ -182,24 +193,64 @@ private class MathScanner(private val src: String) {
 }
 
 /** 把占位符换回 Math 节点；落进代码字面量或链接地址的占位符换回原文，不留私用区字符。 */
-internal fun restoreMath(document: MdDocument, spans: List<MathSpan>): MdDocument =
-    MdDocument(document.blocks.map { restoreBlock(it, spans) })
+internal fun restoreMath(document: MdDocument, extraction: MathExtraction): MdDocument {
+    val placeholder = extraction.placeholder ?: return document
+    val restorer = MathRestorer(extraction.spans, placeholder)
+    return MdDocument(document.blocks.map { restorer.restoreBlock(it) })
+}
 
-private fun restoreBlock(block: MdBlock, spans: List<MathSpan>): MdBlock = when (block) {
-    is MdBlock.Heading -> block.copy(inline = restoreInlines(block.inline, spans))
-    is MdBlock.Paragraph -> {
-        val inline = restoreInlines(block.inline, spans)
-        promoteDisplayMath(inline) ?: MdBlock.Paragraph(inline)
+private class MathRestorer(private val spans: List<MathSpan>, private val placeholder: Regex) {
+
+    fun restoreBlock(block: MdBlock): MdBlock = when (block) {
+        is MdBlock.Heading -> block.copy(inline = restoreInlines(block.inline))
+        is MdBlock.Paragraph -> {
+            val inline = restoreInlines(block.inline)
+            promoteDisplayMath(inline) ?: MdBlock.Paragraph(inline)
+        }
+        is MdBlock.CodeBlock -> block.copy(literal = restoreSource(block.literal))
+        is MdBlock.BulletList -> block.copy(items = block.items.map { item -> item.map { restoreBlock(it) } })
+        is MdBlock.OrderedList -> block.copy(items = block.items.map { item -> item.map { restoreBlock(it) } })
+        is MdBlock.Quote -> block.copy(blocks = block.blocks.map { restoreBlock(it) })
+        is MdBlock.Table -> block.copy(
+            header = block.header.map { it.copy(inline = restoreInlines(it.inline)) },
+            rows = block.rows.map { row -> row.map { it.copy(inline = restoreInlines(it.inline)) } },
+        )
+        MdBlock.ThematicBreak, is MdBlock.Math -> block
     }
-    is MdBlock.CodeBlock -> block.copy(literal = restoreSource(block.literal, spans))
-    is MdBlock.BulletList -> block.copy(items = block.items.map { item -> item.map { restoreBlock(it, spans) } })
-    is MdBlock.OrderedList -> block.copy(items = block.items.map { item -> item.map { restoreBlock(it, spans) } })
-    is MdBlock.Quote -> block.copy(blocks = block.blocks.map { restoreBlock(it, spans) })
-    is MdBlock.Table -> block.copy(
-        header = block.header.map { it.copy(inline = restoreInlines(it.inline, spans)) },
-        rows = block.rows.map { row -> row.map { it.copy(inline = restoreInlines(it.inline, spans)) } },
-    )
-    MdBlock.ThematicBreak, is MdBlock.Math -> block
+
+    private fun restoreInlines(nodes: List<MdInline>): List<MdInline> =
+        nodes.flatMap { node ->
+            when (node) {
+                is MdInline.Text -> splitText(node.literal)
+                is MdInline.Emphasis -> listOf(node.copy(children = restoreInlines(node.children)))
+                is MdInline.Strong -> listOf(node.copy(children = restoreInlines(node.children)))
+                is MdInline.Code -> listOf(node.copy(literal = restoreSource(node.literal)))
+                is MdInline.Link -> listOf(
+                    node.copy(destination = restoreSource(node.destination), children = restoreInlines(node.children)),
+                )
+                is MdInline.Image -> listOf(
+                    node.copy(destination = restoreSource(node.destination), children = restoreInlines(node.children)),
+                )
+                is MdInline.Math, MdInline.SoftBreak, MdInline.HardBreak -> listOf(node)
+            }
+        }
+
+    private fun splitText(literal: String): List<MdInline> {
+        val result = ArrayList<MdInline>()
+        var last = 0
+        placeholder.findAll(literal).forEach { match ->
+            if (match.range.first > last) result.add(MdInline.Text(literal.substring(last, match.range.first)))
+            val span = spans.getOrNull(match.groupValues[1].toInt())
+            result.add(if (span != null) MdInline.Math(span.latex, span.display) else MdInline.Text(match.value))
+            last = match.range.last + 1
+        }
+        if (result.isEmpty()) return listOf(MdInline.Text(literal))
+        if (last < literal.length) result.add(MdInline.Text(literal.substring(last)))
+        return result
+    }
+
+    private fun restoreSource(text: String): String =
+        placeholder.replace(text) { match -> spans.getOrNull(match.groupValues[1].toInt())?.source ?: match.value }
 }
 
 /** 段落只有一个块级公式（允许周围空白与软换行）时提升为块级节点。 */
@@ -216,40 +267,3 @@ private fun promoteDisplayMath(inline: List<MdInline>): MdBlock.Math? {
     return math?.let { MdBlock.Math(it.latex) }
 }
 
-private fun restoreInlines(nodes: List<MdInline>, spans: List<MathSpan>): List<MdInline> =
-    nodes.flatMap { node ->
-        when (node) {
-            is MdInline.Text -> splitText(node.literal, spans)
-            is MdInline.Emphasis -> listOf(node.copy(children = restoreInlines(node.children, spans)))
-            is MdInline.Strong -> listOf(node.copy(children = restoreInlines(node.children, spans)))
-            is MdInline.Code -> listOf(node.copy(literal = restoreSource(node.literal, spans)))
-            is MdInline.Link -> listOf(
-                node.copy(destination = restoreSource(node.destination, spans), children = restoreInlines(node.children, spans)),
-            )
-            is MdInline.Image -> listOf(
-                node.copy(destination = restoreSource(node.destination, spans), children = restoreInlines(node.children, spans)),
-            )
-            is MdInline.Math, MdInline.SoftBreak, MdInline.HardBreak -> listOf(node)
-        }
-    }
-
-private fun splitText(literal: String, spans: List<MathSpan>): List<MdInline> {
-    if (literal.indexOf(PLACEHOLDER_START) < 0) return listOf(MdInline.Text(literal))
-    val result = ArrayList<MdInline>()
-    var last = 0
-    placeholderRegex.findAll(literal).forEach { match ->
-        if (match.range.first > last) result.add(MdInline.Text(literal.substring(last, match.range.first)))
-        val span = spans.getOrNull(match.groupValues[1].toInt())
-        result.add(if (span != null) MdInline.Math(span.latex, span.display) else MdInline.Text(match.value))
-        last = match.range.last + 1
-    }
-    if (last < literal.length) result.add(MdInline.Text(literal.substring(last)))
-    return result
-}
-
-private fun restoreSource(text: String, spans: List<MathSpan>): String {
-    if (text.indexOf(PLACEHOLDER_START) < 0) return text
-    return placeholderRegex.replace(text) { match ->
-        spans.getOrNull(match.groupValues[1].toInt())?.source ?: match.value
-    }
-}
