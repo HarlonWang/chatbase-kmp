@@ -16,7 +16,7 @@ The server half is [chatbase](https://github.com/HarlonWang/chatbase), an npm li
 
 ## What you get
 
-- **A full chat screen in one call.** `ChatScreen(onBack = ...)` renders threads, the input bar, the model picker, Markdown with code highlighting, images and the quota / Pro gates. The host only paints the shell around it.
+- **A full chat screen in one call.** `ChatScreen(onBack = ...)` renders threads, the input bar, the model picker, Markdown with code highlighting, LaTeX formulas, images and the quota / Pro gates. The host only paints the shell around it.
 - **The protocol stays in the SDK.** Chat, transcribe, models and quota are all spoken here against the `/api/chat/*` endpoints that chatbase serves. The host never builds a request.
 - **Local history that survives updates.** Threads and messages live in a Room database (`chat.db`) with versioned schema and migration tests.
 - **Identity and billing stay yours.** `ChatHost` asks the app whether the user is signed in and whether they are Pro, and asks it to open the sign-in and paywall screens. The SDK does not store tokens or know about products.

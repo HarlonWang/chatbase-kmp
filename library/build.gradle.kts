@@ -65,6 +65,11 @@ kotlin {
             // 回复里的 Markdown 图片（生成图）是网络 URL：Coil 3 拉网络图须显式带 fetcher，缺了只会落回链接文字
             implementation(libs.coil.network.ktor)
             implementation(libs.highlights)
+            // 回复里的 LaTeX 公式：纯 Compose 渲染；fonts-katex 是可选字体包，缺了会退回系统字体、数学斜体和大运算符明显难看
+            implementation(libs.latex.base)
+            implementation(libs.latex.parser)
+            implementation(libs.latex.renderer)
+            implementation(libs.latex.fonts.katex)
 
             implementation(libs.room.runtime)
             implementation(libs.okio)

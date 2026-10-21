@@ -19,6 +19,9 @@ sealed interface MdBlock {
     data class Quote(val blocks: List<MdBlock>) : MdBlock
     data object ThematicBreak : MdBlock
     data class Table(val header: List<MdTableCell>, val rows: List<List<MdTableCell>>) : MdBlock
+
+    /** 独立成段的块级公式（`$$…$$` 或 `\[…\]` 单独占一段）。[latex] 不含定界符。 */
+    data class Math(val latex: String) : MdBlock
 }
 
 data class MdTableCell(val alignment: MdAlign, val inline: List<MdInline>)
@@ -34,12 +37,29 @@ sealed interface MdInline {
     data class Image(val destination: String, val children: List<MdInline>) : MdInline
     data object SoftBreak : MdInline
     data object HardBreak : MdInline
+
+    /**
+     * 公式，[latex] 不含定界符。[display] 为 true 表示源串用的是块级定界符但混在段落文字里
+     * （如列表项里的 `$$…$$`），渲染时按块级样式单独占一行。
+     */
+    data class Math(val latex: String, val display: Boolean) : MdInline
 }
 
 /**
- * 解析 Markdown（CommonMark + GFM 表格）。解析器线程安全、可重复调用。
+ * 解析 Markdown（CommonMark + GFM 表格 + LaTeX 公式）。解析器线程安全、可重复调用。
+ *
+ * 公式必须在方言解析器之前抽出：`\(`、`\[` 会被当成反斜杠转义吃掉，`_`、`*` 会被当成强调。
+ * 抽出与回填都在公共层（[extractMath] / [restoreMath]），两端方言解析器零改动，
+ * commonTest 里的公式用例自然两端同跑。
  */
-expect fun parseMarkdown(markdown: String): MdDocument
+fun parseMarkdown(markdown: String): MdDocument {
+    val extraction = extractMath(markdown)
+    if (extraction.spans.isEmpty()) return parseMarkdownDialect(markdown)
+    return restoreMath(parseMarkdownDialect(extraction.markdown), extraction.spans)
+}
+
+/** 平台方言解析器：Android 映射自 commonmark-java，iOS 映射自 cmark-gfm，只认 CommonMark + GFM 表格。 */
+internal expect fun parseMarkdownDialect(markdown: String): MdDocument
 
 /** 拍平 inline 子树的全部文本字面量（图片 alt、纯文本降级用）。 */
 fun List<MdInline>.plainText(): String = buildString { appendPlainText(this@plainText) }
@@ -53,6 +73,7 @@ private fun StringBuilder.appendPlainText(nodes: List<MdInline>) {
             is MdInline.Strong -> appendPlainText(node.children)
             is MdInline.Link -> appendPlainText(node.children)
             is MdInline.Image -> appendPlainText(node.children)
+            is MdInline.Math -> append(node.latex)
             MdInline.SoftBreak -> append(" ")
             MdInline.HardBreak -> append("\n")
         }

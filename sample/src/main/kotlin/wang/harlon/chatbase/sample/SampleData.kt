@@ -49,6 +49,41 @@ object SampleData {
         更多见 [官方文档](https://kotlinlang.org/docs/coroutines-overview.html)。
     """.trimIndent()
 
+    /** 覆盖四种定界符、块级与行内混排、矩阵、金额与代码里的 `$` 不误伤，用于验收公式渲染。 */
+    val mathMarkdown: String = """
+        ## 二次方程
+
+        对于 \(ax^2 + bx + c = 0\)，判别式 $\Delta = b^2 - 4ac$ 决定根的个数：
+
+        \[
+        x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+        \]
+
+        ## 级数与积分
+
+        - 等比级数 $\sum_{n=0}^{\infty} ar^n = \frac{a}{1-r}$，当 $|r| < 1$
+        - 高斯积分 $$\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}$$
+
+        ## 矩阵
+
+        $$
+        \begin{pmatrix} a & b \\ c & d \end{pmatrix}
+        \begin{pmatrix} x \\ y \end{pmatrix}
+        =
+        \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}
+        $$
+
+        ## 不该被当成公式的
+
+        价格从 $5 涨到 $10，区间 $5-$10；代码里的 `${'$'}HOME` 和
+
+        ```bash
+        echo ${'$'}PATH
+        ```
+
+        都要原样显示。
+    """.trimIndent()
+
     /** Demo 打开即展示的初始会话。 */
     val messages: List<ChatMessage> = listOf(
         ChatMessage(1, Role.USER, "用一句话介绍 Kotlin 协程，并给个例子"),
@@ -72,6 +107,8 @@ object SampleData {
                 "下面这张会加载失败，降级为可点链接：\n\n" +
                 "![加载失败的图](https://example.com/broken.png)",
         ),
+        ChatMessage(7, Role.USER, "推导一下二次方程的求根公式，顺便讲讲级数和矩阵"),
+        ChatMessage(8, Role.ASSISTANT, mathMarkdown),
     )
 
     /** 末位 id，供 ViewModel 续号。 */

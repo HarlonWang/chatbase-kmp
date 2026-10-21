@@ -16,7 +16,7 @@
 
 ## 能力
 
-- **一行拿到整页聊天。** `ChatScreen(onBack = ...)` 渲染会话列表、输入栏、模型选择器、带代码高亮的 Markdown、图片，以及额度与 Pro 门槛。宿主只画外面的壳。
+- **一行拿到整页聊天。** `ChatScreen(onBack = ...)` 渲染会话列表、输入栏、模型选择器、带代码高亮和 LaTeX 公式的 Markdown、图片，以及额度与 Pro 门槛。宿主只画外面的壳。
 - **协议留在 SDK 里。** chat、transcribe、models、quota 四个端点都在这里对 chatbase 的 `/api/chat/*` 说话，宿主不拼任何请求。
 - **历史随升级保留。** 会话与消息落在 Room 库 `chat.db`，schema 有版本，迁移有测试。
 - **身份与收款归你。** `ChatHost` 向 App 询问是否登录、是否 Pro，并请 App 打开登录页与付费页。SDK 不存 token，不知道商品。
