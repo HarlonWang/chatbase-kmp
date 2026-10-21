@@ -110,8 +110,44 @@ class MarkdownMathTest {
     /** 源文本里本来就有占位符同形的私用区序列时，不能被误当占位符替换成公式。 */
     @Test
     fun literal_private_use_sequence_is_not_mistaken_for_placeholder() {
-        val literal = "0"
+        val literal = "" + "0" + ""
         assertEquals(listOf(text("前 $literal 后 "), inlineMath("y")), paragraph("前 $literal 后 \$y\$"))
+    }
+
+    /** CommonMark：反引号开栏的 info string 不能再含反引号，这样的行是行内代码，不能把后文都吞进围栏。 */
+    @Test
+    fun backtick_run_with_backtick_in_info_is_not_a_fence() {
+        val blocks = parse("```foo``` bar\n\n后文 \$x\$")
+        assertEquals(MdBlock.Paragraph(listOf(text("后文 "), inlineMath("x"))), blocks[1])
+    }
+
+    /** 引用块里的围栏同样要跳过，否则 `$$` 会从代码块一路配对到引用后面的文字。 */
+    @Test
+    fun fence_inside_blockquote_is_skipped() {
+        val blocks = parse("> ```\n> \$\$ x\n> ```\n> 后文 \$y\$")
+        assertEquals(
+            MdBlock.Quote(
+                listOf(
+                    MdBlock.CodeBlock("\$\$ x", ""),
+                    MdBlock.Paragraph(listOf(text("后文 "), inlineMath("y"))),
+                ),
+            ),
+            blocks.single(),
+        )
+    }
+
+    /** 公式不跨段：未闭合的 `$$` 不能和几段之后的 `$$` 配对，否则中间的段落全被吞掉。 */
+    @Test
+    fun display_math_does_not_cross_blank_line() {
+        val blocks = parse("\$\$ a\n\n中间段落\n\n\$\$ b \$\$")
+        assertEquals(
+            listOf(
+                MdBlock.Paragraph(listOf(text("\$\$ a"))),
+                MdBlock.Paragraph(listOf(text("中间段落"))),
+                MdBlock.Math("b"),
+            ),
+            blocks,
+        )
     }
 
     @Test

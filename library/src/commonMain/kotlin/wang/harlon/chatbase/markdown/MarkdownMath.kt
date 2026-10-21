@@ -61,11 +61,11 @@ private class MathScanner(private val src: String, private val start: Char, priv
     private fun handleLineStart(): Boolean {
         atLineStart = false
         val lineEnd = src.indexOf('\n', pos).let { if (it < 0) src.length else it }
-        val line = src.substring(pos, lineEnd)
+        val line = stripQuotePrefix(src.substring(pos, lineEnd))
         val run = fenceRun(line)
         val current = fence
         if (current == null) {
-            if (run == null) return false
+            if (run == null || !opensFence(line, run)) return false
             fence = run
         } else if (run != null && run[0] == current[0] && run.length >= current.length && closesFence(line, run)) {
             fence = null
@@ -87,6 +87,23 @@ private class MathScanner(private val src: String, private val start: Char, priv
         while (end < line.length && line[end] == ch) end++
         return if (end - i >= 3) line.substring(i, end) else null
     }
+
+    /** 引用块里的围栏带 `> ` 前缀（可嵌套），去掉前缀再判围栏，否则引用里的代码块会被当成正文扫公式。 */
+    private fun stripQuotePrefix(line: String): String {
+        var rest = line
+        while (true) {
+            var i = 0
+            while (i < rest.length && i < 3 && rest[i] == ' ') i++
+            if (i >= rest.length || rest[i] != '>') return rest
+            i++
+            if (i < rest.length && rest[i] == ' ') i++
+            rest = rest.substring(i)
+        }
+    }
+
+    /** CommonMark：反引号开栏的 info string 不能再含反引号，"```foo``` bar" 是行内代码不是围栏。 */
+    private fun opensFence(line: String, run: String): Boolean =
+        run[0] != '`' || line.indexOf('`', line.indexOf(run) + run.length) < 0
 
     /** CommonMark：闭栏行的围栏串之后只能是空白，"``` text" 这种是代码内容不是闭栏。 */
     private fun closesFence(line: String, run: String): Boolean {
@@ -147,7 +164,8 @@ private class MathScanner(private val src: String, private val start: Char, priv
         while (end >= 0 && src[end - 1] == '\\') end = src.indexOf(close, end + 1)
         if (end < 0) return false
         val latex = src.substring(start, end)
-        if (latex.isBlank()) return false
+        // 公式不跨段：跨空行的闭合串多半是后文另一个公式或代码里的 $$，配对会吞掉中间的段落、列表和围栏
+        if (latex.isBlank() || crossesBlankLine(latex)) return false
         emit(latex, display, source = src.substring(pos, end + close.length))
         pos = end + close.length
         return true
@@ -166,11 +184,14 @@ private class MathScanner(private val src: String, private val start: Char, priv
         if (src[end - 1].isWhitespace()) return false
         if (src.getOrNull(end + 1)?.isDigit() == true) return false
         val latex = src.substring(pos + 1, end)
-        if (latex.contains("\n\n") || !looksLikeMath(latex)) return false
+        if (crossesBlankLine(latex) || !looksLikeMath(latex)) return false
         emit(latex, display = false, source = src.substring(pos, end + 1))
         pos = end + 1
         return true
     }
+
+    /** 公式内部（去掉首尾换行后）出现空行，即跨了 Markdown 段落边界。 */
+    private fun crossesBlankLine(latex: String): Boolean = latex.trim().lineSequence().any { it.isBlank() }
 
     /** 含运算符、命令或结构符号，或本身就是一个不含空白的 token（变量名、数字），才当公式。 */
     private fun looksLikeMath(latex: String): Boolean =
