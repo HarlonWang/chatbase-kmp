@@ -17,3 +17,21 @@ internal fun String.withoutPendingSetextUnderline(): String {
     if (lineStart == 0) return this
     return if (SETEXT_UNDERLINE.matches(substring(lineStart))) substring(0, lineStart) else this
 }
+
+/**
+ * 流式渲染要交给解析器的内容。[pendingMath] 为 true 表示末尾有一个还没写完的块级公式，已从 [markdown] 中截掉，
+ * 渲染层在它的位置放一个占位。
+ */
+internal class StreamingMarkdown(val markdown: String, val pendingMath: Boolean)
+
+/**
+ * 流式中途的半截内容按「写完前不改变已渲染结构」处理：
+ * - 末尾还没写完的块级公式（`$$`、`\[` 找不到闭合）截掉，不显示半截源码。源码往往比公式高，
+ *   闭合后换成公式会让消息变矮、内容回落；占位比公式矮，闭合时内容只往上推
+ * - 末尾疑似 setext 下划线的行先不交给解析器，见 [withoutPendingSetextUnderline]
+ */
+internal fun streamingMarkdown(markdown: String): StreamingMarkdown {
+    val cut = extractMath(markdown).pendingDisplayStart
+    val head = if (cut == null) markdown else markdown.substring(0, cut)
+    return StreamingMarkdown(head.withoutPendingSetextUnderline(), pendingMath = cut != null)
+}

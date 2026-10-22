@@ -1,10 +1,14 @@
 package wang.harlon.chatbase.markdown
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -65,5 +69,23 @@ internal fun MathBlock(latex: String, textStyle: TextStyle) {
     val minHeight = with(LocalDensity.current) { dimensions.heightPx.toDp() }
     Box(Modifier.fillMaxWidth().heightIn(min = minHeight).padding(vertical = 2.dp)) {
         LatexAutoWrap(latex = latex, config = config)
+    }
+}
+
+/**
+ * 流式中还没写完的块级公式：不显示半截源码，先占一条骨架。
+ * 高度只有一个字高，比任何公式都矮，公式闭合时内容只往上推。
+ */
+@Composable
+internal fun PendingMathBlock(textStyle: TextStyle) {
+    val base = if (textStyle.fontSize.isSpecified) textStyle.fontSize else 16.sp
+    val barHeight = with(LocalDensity.current) { base.toDp() }
+    Box(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth(0.4f)
+                .height(barHeight)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)),
+        )
     }
 }

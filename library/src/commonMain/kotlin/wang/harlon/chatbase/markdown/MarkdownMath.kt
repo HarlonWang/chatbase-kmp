@@ -12,8 +12,14 @@ internal class MathSpan(val latex: String, val display: Boolean, val source: Str
 /**
  * 抽出结果。[placeholder] 是本次使用的占位符模式：占位符由一对私用区字符夹一个序号构成，
  * 两端方言解析器都会原样当文本透传；字符对按源文本动态挑选，源文本里本来就有的同形序列不会被误当占位符。
+ * [pendingDisplayStart] 是源串里第一个找不到闭合串的块级定界符位置（流式中还没写完的块级公式），没有则为 null。
  */
-internal class MathExtraction(val markdown: String, val spans: List<MathSpan>, val placeholder: Regex?)
+internal class MathExtraction(
+    val markdown: String,
+    val spans: List<MathSpan>,
+    val placeholder: Regex?,
+    val pendingDisplayStart: Int? = null,
+)
 
 /** 候选的占位符字符对，全部在 Unicode 私用区；逐对挑第一对源文本里都不含的。 */
 private val placeholderCandidates = listOf('\uE000' to '\uE001', '\uE010' to '\uE011', '\uF8F0' to '\uF8F1')
@@ -38,6 +44,8 @@ private class MathScanner(private val src: String, private val start: Char, priv
     /** 开栏行所在的引用块层级；行首 `>` 少于此数即离开了该引用块，围栏随之结束。 */
     private var fenceQuoteDepth = 0
 
+    private var pendingDisplayStart: Int? = null
+
     fun run(): MathExtraction {
         while (pos < src.length) {
             if (atLineStart && handleLineStart()) continue
@@ -57,7 +65,7 @@ private class MathScanner(private val src: String, private val start: Char, priv
             }
         }
         val placeholder = if (spans.isEmpty()) null else Regex("$start(\\d+)$end")
-        return MathExtraction(out.toString(), spans, placeholder)
+        return MathExtraction(out.toString(), spans, placeholder, pendingDisplayStart)
     }
 
     /** 行首：维护围栏代码块状态；在围栏内整行原样复制。返回 true 表示已消费整行。 */
@@ -175,7 +183,12 @@ private class MathScanner(private val src: String, private val start: Char, priv
         val start = pos + open.length
         var end = src.indexOf(close, start)
         while (end >= 0 && src[end - 1] == '\\') end = src.indexOf(close, end + 1)
-        if (end < 0) return false
+        if (end < 0) {
+            // 到结尾都没有闭合串：流式中多半是还没写完的块级公式，记下第一个，交给流式渲染换成占位
+            val rest = src.substring(start)
+            if (display && pendingDisplayStart == null && (rest.isBlank() || !crossesBlankLine(rest))) pendingDisplayStart = pos
+            return false
+        }
         val latex = src.substring(start, end)
         // 公式不跨段：跨空行的闭合串多半是后文另一个公式或代码里的 $$，配对会吞掉中间的段落、列表和围栏
         if (latex.isBlank() || crossesBlankLine(latex)) return false

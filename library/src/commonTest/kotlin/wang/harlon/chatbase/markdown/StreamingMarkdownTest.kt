@@ -37,4 +37,40 @@ class StreamingMarkdownTest {
             "",
         ).forEach { assertEquals(it, it.withoutPendingSetextUnderline()) }
     }
+
+    @Test
+    fun pending_display_math_is_cut_off() {
+        listOf(
+            "前文\n\n\$\$\n\\begin{pmatrix} a & b" to "前文\n\n",
+            "前文\n\n\\[\nx = " to "前文\n\n",
+            "前文\n\n\$\$" to "前文\n\n", // 只吐出了开头定界符
+            "\$\$a\$\$\n\n\$\$\nb" to "\$\$a\$\$\n\n", // 前一个已闭合，截在后一个
+        ).forEach { (source, head) ->
+            val view = streamingMarkdown(source)
+            assertEquals(head, view.markdown, source)
+            assertEquals(true, view.pendingMath, source)
+        }
+    }
+
+    @Test
+    fun closed_or_non_math_dollars_are_kept() {
+        listOf(
+            "\$\$x\$\$ 后文",
+            "前文\n\n\$\$\nx\n\$\$", // 已闭合
+            "```\n\$\$\n", // 围栏代码块里
+            "`\$\$` 是块级定界符", // 行内代码里
+            "价格 \$\$ 很贵\n\n后文", // 跨空行，不是公式
+        ).forEach { source ->
+            val view = streamingMarkdown(source)
+            assertEquals(source, view.markdown, source)
+            assertEquals(false, view.pendingMath, source)
+        }
+    }
+
+    @Test
+    fun setext_hold_back_still_applies_without_pending_math() {
+        val view = streamingMarkdown("\\end{pmatrix}\n=")
+        assertEquals("\\end{pmatrix}\n", view.markdown)
+        assertEquals(false, view.pendingMath)
+    }
 }
