@@ -136,17 +136,33 @@ class ChatViewModelStreamingTest {
 
     @Test
     fun `失败的错误条也沿用占位 key`() = runTest(dispatcher) {
-        val engine = ScriptedEngine(failWith = ChatError(ChatErrorCategory.SERVER, code = "stream_interrupted"))
-        val keys = mutableListOf<Long>()
+        // 挂起的引擎：先在流式中途记下占位 key，再放行让它失败；同步抛错的引擎会在记录前就完成替换
+        val release = CompletableDeferred<Unit>()
+        val engine = object : ChatEngine {
+            override suspend fun send(
+                history: List<ChatMessage>,
+                onDelta: (String) -> Unit,
+                search: Boolean,
+                onSearch: (wang.harlon.chatbase.model.SearchEvent) -> Unit,
+                imageGeneration: Boolean,
+                onImageGeneration: (wang.harlon.chatbase.model.ImageGenerationEvent) -> Unit,
+            ): String {
+                onDelta("你")
+                release.await()
+                throw ChatException(ChatError(ChatErrorCategory.SERVER, code = "stream_interrupted"))
+            }
+        }
         val viewModel = vm(engine)
         viewModel.sendText("hi")
-        // 占位刚追加、引擎尚未跑完时记下它的 key
-        dispatcher.scheduler.runCurrent()
-        viewModel.uiState.value.messages.lastOrNull { it.role == Role.ASSISTANT }?.let { keys += it.key }
+        advanceUntilIdle()
+        val placeholder = viewModel.uiState.value.messages.last()
+        assertTrue(placeholder.streaming)
+        release.complete(Unit)
         advanceUntilIdle()
         val failed = viewModel.uiState.value.messages.last()
         assertNotNull(failed.error)
-        assertEquals(keys.single(), failed.key)
+        assertTrue(failed.id != placeholder.id)
+        assertEquals(placeholder.key, failed.key)
     }
 
     @Test

@@ -15,7 +15,8 @@ enum class Role { USER, ASSISTANT }
  * @param generatingImage 流式过程中「正在生成图片」瞬态指示（不持久化）
  * @param model 生成本条消息的模型 id（气泡上标注用），可空
  * @param streaming 内容仍在流式追加（不持久化），渲染层据此处理半截内容
- * @param uiKey 显式指定的 UI 身份，为空时取 [id]，见 [key]
+ * @param uiKey 显式指定的 UI 身份，为空时取 [id]，见 [key]。生效后的 key 须在当前列表内唯一
+ *   （它就是 LazyColumn 的 key），一般只由 ViewModel 给流式占位分配
  */
 data class ChatMessage(
     val id: Long,
