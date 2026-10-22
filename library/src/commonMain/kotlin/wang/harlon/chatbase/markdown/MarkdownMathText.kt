@@ -73,7 +73,7 @@ internal fun MathBlock(latex: String, textStyle: TextStyle) {
 }
 
 /**
- * 流式中还没写完的块级公式：不显示半截源码，先占一条骨架。
+ * 流式中还没写完的块级公式（pending 的 Math 节点）：不显示半截源码，先占一条骨架。
  * 高度只有一个字高，比任何公式都矮，公式闭合时内容只往上推。
  */
 @Composable

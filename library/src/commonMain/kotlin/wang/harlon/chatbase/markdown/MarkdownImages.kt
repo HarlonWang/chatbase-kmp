@@ -11,7 +11,7 @@ internal sealed interface InlineSegment {
     data class Image(val url: String, val alt: String) : InlineSegment
 
     /** 混在段落文字里的块级公式（`$$…$$` / `\[…\]`），按块级样式独占一行。 */
-    data class Math(val latex: String) : InlineSegment
+    data class Math(val latex: String, val pending: Boolean) : InlineSegment
 }
 
 /**
@@ -35,7 +35,7 @@ internal fun splitInline(inline: List<MdInline>): List<InlineSegment> {
             }
             node is MdInline.Math && node.display -> {
                 flushText()
-                segments.add(InlineSegment.Math(node.latex))
+                segments.add(InlineSegment.Math(node.latex, node.pending))
             }
             else -> pending.add(node)
         }

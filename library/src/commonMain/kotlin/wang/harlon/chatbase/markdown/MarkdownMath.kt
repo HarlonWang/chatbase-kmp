@@ -7,32 +7,37 @@ package wang.harlon.chatbase.markdown
  * 围栏代码块与行内代码原样跳过；未闭合的定界符一律按普通文本处理，流式中间态不会闪成公式。
  * 单 `$` 走 Pandoc 式规则防金额误伤：开头后不能是空白，结尾前不能是空白、结尾后不能跟数字。
  */
-internal class MathSpan(val latex: String, val display: Boolean, val source: String)
+internal class MathSpan(val latex: String, val display: Boolean, val source: String, val pending: Boolean = false)
 
 /**
  * 抽出结果。[placeholder] 是本次使用的占位符模式：占位符由一对私用区字符夹一个序号构成，
  * 两端方言解析器都会原样当文本透传；字符对按源文本动态挑选，源文本里本来就有的同形序列不会被误当占位符。
- * [pendingDisplayStart] 是源串里第一个找不到闭合串的块级定界符位置（流式中还没写完的块级公式），没有则为 null。
  */
-internal class MathExtraction(
-    val markdown: String,
-    val spans: List<MathSpan>,
-    val placeholder: Regex?,
-    val pendingDisplayStart: Int? = null,
-)
+internal class MathExtraction(val markdown: String, val spans: List<MathSpan>, val placeholder: Regex?)
 
 /** 候选的占位符字符对，全部在 Unicode 私用区；逐对挑第一对源文本里都不含的。 */
 private val placeholderCandidates = listOf('\uE000' to '\uE001', '\uE010' to '\uE011', '\uF8F0' to '\uF8F1')
 
-internal fun extractMath(markdown: String): MathExtraction {
+/**
+ * 块级定界符所在行、定界符之前只允许出现的内容：空白、引用符、列表标记。
+ * 流式中只把这样起头的未闭合定界符当成还没写完的块级公式；段落中间、链接地址里的 `$$`、`\[` 不算。
+ */
+private val DISPLAY_LINE_PREFIX = Regex("^[ \\t]*(?:(?:>|[-*+]|\\d{1,9}[.)])[ \\t]*)*$")
+
+internal fun extractMath(markdown: String, streaming: Boolean = false): MathExtraction {
     if (markdown.indexOf('$') < 0 && markdown.indexOf('\\') < 0) return MathExtraction(markdown, emptyList(), null)
     val (start, end) = placeholderCandidates.firstOrNull { (s, e) -> markdown.indexOf(s) < 0 && markdown.indexOf(e) < 0 }
         // 三对都撞上几乎不可能；真撞上就放弃抽公式，按接入前的行为原样显示
         ?: return MathExtraction(markdown, emptyList(), null)
-    return MathScanner(markdown, start, end).run()
+    return MathScanner(markdown, start, end, streaming).run()
 }
 
-private class MathScanner(private val src: String, private val start: Char, private val end: Char) {
+private class MathScanner(
+    private val src: String,
+    private val start: Char,
+    private val end: Char,
+    private val streaming: Boolean,
+) {
     private val out = StringBuilder(src.length)
     private val spans = ArrayList<MathSpan>()
     private var pos = 0
@@ -43,8 +48,6 @@ private class MathScanner(private val src: String, private val start: Char, priv
 
     /** 开栏行所在的引用块层级；行首 `>` 少于此数即离开了该引用块，围栏随之结束。 */
     private var fenceQuoteDepth = 0
-
-    private var pendingDisplayStart: Int? = null
 
     fun run(): MathExtraction {
         while (pos < src.length) {
@@ -65,7 +68,7 @@ private class MathScanner(private val src: String, private val start: Char, priv
             }
         }
         val placeholder = if (spans.isEmpty()) null else Regex("$start(\\d+)$end")
-        return MathExtraction(out.toString(), spans, placeholder, pendingDisplayStart)
+        return MathExtraction(out.toString(), spans, placeholder)
     }
 
     /** 行首：维护围栏代码块状态；在围栏内整行原样复制。返回 true 表示已消费整行。 */
@@ -183,17 +186,29 @@ private class MathScanner(private val src: String, private val start: Char, priv
         val start = pos + open.length
         var end = src.indexOf(close, start)
         while (end >= 0 && src[end - 1] == '\\') end = src.indexOf(close, end + 1)
-        if (end < 0) {
-            // 到结尾都没有闭合串：流式中多半是还没写完的块级公式，记下第一个，交给流式渲染换成占位
-            val rest = src.substring(start)
-            if (display && pendingDisplayStart == null && (rest.isBlank() || !crossesBlankLine(rest))) pendingDisplayStart = pos
-            return false
-        }
+        if (end < 0) return display && tryPendingDisplay(start)
         val latex = src.substring(start, end)
         // 公式不跨段：跨空行的闭合串多半是后文另一个公式或代码里的 $$，配对会吞掉中间的段落、列表和围栏
         if (latex.isBlank() || crossesBlankLine(latex)) return false
         emit(latex, display, source = src.substring(pos, end + close.length))
         pos = end + close.length
+        return true
+    }
+
+    /**
+     * 流式中到结尾都没有闭合串的块级公式：定界符独占行首、其后不跨空行，才当成还没写完。
+     * 原位留一个 pending 占位并丢弃其后的内容，解析器会把它放进所在的列表项、引用块；
+     * 不显示半截源码，源码往往比公式高，闭合后换成公式会让内容回落。
+     */
+    private fun tryPendingDisplay(contentStart: Int): Boolean {
+        if (!streaming) return false
+        val rest = src.substring(contentStart)
+        if (!rest.isBlank() && crossesBlankLine(rest)) return false
+        val lineStart = src.lastIndexOf('\n', pos - 1) + 1
+        if (!DISPLAY_LINE_PREFIX.matches(src.substring(lineStart, pos))) return false
+        out.append(start).append(spans.size).append(end)
+        spans.add(MathSpan(rest.trim(), display = true, source = src.substring(pos), pending = true))
+        pos = src.length
         return true
     }
 
@@ -288,7 +303,7 @@ private class MathRestorer(private val spans: List<MathSpan>, private val placeh
         placeholder.findAll(literal).forEach { match ->
             if (match.range.first > last) result.add(MdInline.Text(literal.substring(last, match.range.first)))
             val span = spans.getOrNull(match.groupValues[1].toInt())
-            result.add(if (span != null) MdInline.Math(span.latex, span.display) else MdInline.Text(match.value))
+            result.add(if (span != null) MdInline.Math(span.latex, span.display, span.pending) else MdInline.Text(match.value))
             last = match.range.last + 1
         }
         if (result.isEmpty()) return listOf(MdInline.Text(literal))
@@ -311,6 +326,6 @@ private fun promoteDisplayMath(inline: List<MdInline>): MdBlock.Math? {
             else -> return null
         }
     }
-    return math?.let { MdBlock.Math(it.latex) }
+    return math?.let { MdBlock.Math(it.latex, it.pending) }
 }
 

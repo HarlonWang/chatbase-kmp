@@ -53,20 +53,11 @@ fun MarkdownText(
     streaming: Boolean = false,
     onImageClick: (String) -> Unit = {},
 ) {
-    val (document, pendingMath) = remember(markdown, streaming) {
-        if (streaming) {
-            val view = streamingMarkdown(markdown)
-            parseMarkdown(view.markdown) to view.pendingMath
-        } else {
-            parseMarkdown(markdown) to false
-        }
+    val document = remember(markdown, streaming) {
+        if (streaming) parseMarkdown(markdown.withoutPendingSetextUnderline(), streaming = true) else parseMarkdown(markdown)
     }
     Column(modifier = modifier) {
         MarkdownBlocks(document.blocks, textStyle, onImageClick)
-        if (pendingMath) {
-            if (document.blocks.isNotEmpty()) Spacer(Modifier.padding(top = 4.dp))
-            PendingMathBlock(textStyle)
-        }
     }
 }
 
@@ -108,7 +99,8 @@ private fun BlockNode(block: MdBlock, textStyle: TextStyle, onImageClick: (Strin
                             is InlineSegment.Text -> InlineText(segment.nodes, textStyle, inlineStyles)
                             is InlineSegment.Image ->
                                 MarkdownImage(url = segment.url, alt = segment.alt, onClick = onImageClick)
-                            is InlineSegment.Math -> MathBlock(latex = segment.latex, textStyle = textStyle)
+                            is InlineSegment.Math ->
+                                if (segment.pending) PendingMathBlock(textStyle) else MathBlock(segment.latex, textStyle)
                         }
                     }
                 }
@@ -117,7 +109,7 @@ private fun BlockNode(block: MdBlock, textStyle: TextStyle, onImageClick: (Strin
 
         is MdBlock.CodeBlock -> CodeBlock(code = block.literal, language = block.language)
 
-        is MdBlock.Math -> MathBlock(latex = block.latex, textStyle = textStyle)
+        is MdBlock.Math -> if (block.pending) PendingMathBlock(textStyle) else MathBlock(block.latex, textStyle)
 
         is MdBlock.BulletList -> ListBlock(block.items, textStyle, ordered = false, start = 1, onImageClick = onImageClick)
 

@@ -20,8 +20,11 @@ sealed interface MdBlock {
     data object ThematicBreak : MdBlock
     data class Table(val header: List<MdTableCell>, val rows: List<List<MdTableCell>>) : MdBlock
 
-    /** 独立成段的块级公式（`$$…$$` 或 `\[…\]` 单独占一段）。[latex] 不含定界符。 */
-    data class Math(val latex: String) : MdBlock
+    /**
+     * 独立成段的块级公式（`$$…$$` 或 `\[…\]` 单独占一段）。[latex] 不含定界符。
+     * [pending] 为 true 表示流式中还没写到闭合串，[latex] 是已到达的半截内容，渲染层显示占位。
+     */
+    data class Math(val latex: String, val pending: Boolean = false) : MdBlock
 }
 
 data class MdTableCell(val alignment: MdAlign, val inline: List<MdInline>)
@@ -40,9 +43,9 @@ sealed interface MdInline {
 
     /**
      * 公式，[latex] 不含定界符。[display] 为 true 表示源串用的是块级定界符但混在段落文字里
-     * （如列表项里的 `$$…$$`），渲染时按块级样式单独占一行。
+     * （如列表项里的 `$$…$$`），渲染时按块级样式单独占一行。[pending] 同 [MdBlock.Math.pending]。
      */
-    data class Math(val latex: String, val display: Boolean) : MdInline
+    data class Math(val latex: String, val display: Boolean, val pending: Boolean = false) : MdInline
 }
 
 /**
@@ -51,9 +54,12 @@ sealed interface MdInline {
  * 公式必须在方言解析器之前抽出：`\(`、`\[` 会被当成反斜杠转义吃掉，`_`、`*` 会被当成强调。
  * 抽出与回填都在公共层（[extractMath] / [restoreMath]），两端方言解析器零改动，
  * commonTest 里的公式用例自然两端同跑。
+ *
+ * @param streaming 内容仍在流式追加：行首起头、到结尾都没有闭合串的块级公式按「还没写完」处理，
+ *   解析成 pending 的公式节点并丢弃其后的内容，留在它所在的列表项、引用块里；非流式下未闭合的定界符按普通文本
  */
-fun parseMarkdown(markdown: String): MdDocument {
-    val extraction = extractMath(markdown)
+fun parseMarkdown(markdown: String, streaming: Boolean = false): MdDocument {
+    val extraction = extractMath(markdown, streaming)
     if (extraction.spans.isEmpty()) return parseMarkdownDialect(markdown)
     return restoreMath(parseMarkdownDialect(extraction.markdown), extraction)
 }
