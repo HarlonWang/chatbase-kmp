@@ -28,6 +28,7 @@ private const val FONT_SCALE = 1.5f
  * 放大靠覆盖 [LocalDensity] 的 fontScale，Markdown 里标题、代码块与正文按同一比例一起变大。
  *
  * @param markdown 为 true 时按 Markdown 渲染（助手回复），否则按纯文本（用户消息）
+ * @param streaming 内容仍在流式追加，透传给 [MarkdownText]
  */
 @Composable
 fun TextViewer(
@@ -35,6 +36,7 @@ fun TextViewer(
     markdown: Boolean,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    streaming: Boolean = false,
 ) {
     val density = LocalDensity.current
     Box(
@@ -56,7 +58,7 @@ fun TextViewer(
                 ) {
                     val style = MaterialTheme.typography.bodyLarge
                     if (markdown) {
-                        MarkdownText(markdown = content, textStyle = style)
+                        MarkdownText(markdown = content, textStyle = style, streaming = streaming)
                     } else {
                         Text(text = content, style = style)
                     }

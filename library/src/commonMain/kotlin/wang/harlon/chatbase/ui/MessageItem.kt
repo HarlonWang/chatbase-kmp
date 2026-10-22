@@ -203,6 +203,7 @@ private fun AssistantMessage(
             MarkdownText(
                 markdown = message.content,
                 textStyle = MaterialTheme.typography.bodyLarge,
+                streaming = message.streaming,
                 onImageClick = { onOpenViewer(ChatViewer.Image(it)) },
                 modifier = Modifier.doubleTapToEnlarge { onOpenViewer(ChatViewer.Text(message.id)) },
             )

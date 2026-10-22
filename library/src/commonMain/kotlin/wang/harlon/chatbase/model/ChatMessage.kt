@@ -14,6 +14,7 @@ enum class Role { USER, ASSISTANT }
  * @param searching 流式过程中「正在搜索」瞬态指示（不持久化）
  * @param generatingImage 流式过程中「正在生成图片」瞬态指示（不持久化）
  * @param model 生成本条消息的模型 id（气泡上标注用），可空
+ * @param streaming 内容仍在流式追加（不持久化），渲染层据此处理半截内容
  */
 data class ChatMessage(
     val id: Long,
@@ -25,4 +26,5 @@ data class ChatMessage(
     val searching: Boolean = false,
     val generatingImage: Boolean = false,
     val model: String? = null,
+    val streaming: Boolean = false,
 )

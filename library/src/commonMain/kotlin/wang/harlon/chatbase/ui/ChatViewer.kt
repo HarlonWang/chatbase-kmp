@@ -47,6 +47,7 @@ internal fun ChatViewerOverlay(
                         content = message.content,
                         markdown = message.role == Role.ASSISTANT,
                         onDismiss = onDismiss,
+                        streaming = message.streaming,
                     )
                 }
             }
