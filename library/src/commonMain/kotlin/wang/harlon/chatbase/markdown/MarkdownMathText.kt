@@ -38,8 +38,9 @@ internal fun rememberMathConfig(textStyle: TextStyle, scale: Float = 1f): LatexC
         LatexConfig(
             fontSize = fontSize,
             theme = LatexTheme.light(color = color),
-            // 流式每个 delta 都重组，相同子树 + 相同上下文的测量结果跨帧复用
-            enableLayoutCache = true,
+            // 不开 enableLayoutCache：它以 AST 子树 + 渲染上下文为哈希键，每个节点查缓存都要递归哈希整棵子树，
+            // Redmi 8A 实测单个公式的测量从 1 ms 涨到 15 到 44 ms，是滚动长帧的主因
+            enableLayoutCache = false,
         )
     }
 }
