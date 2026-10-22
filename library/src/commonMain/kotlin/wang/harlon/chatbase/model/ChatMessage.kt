@@ -15,6 +15,7 @@ enum class Role { USER, ASSISTANT }
  * @param generatingImage 流式过程中「正在生成图片」瞬态指示（不持久化）
  * @param model 生成本条消息的模型 id（气泡上标注用），可空
  * @param streaming 内容仍在流式追加（不持久化），渲染层据此处理半截内容
+ * @param uiKey 显式指定的 UI 身份，为空时取 [id]，见 [key]
  */
 data class ChatMessage(
     val id: Long,
@@ -27,4 +28,12 @@ data class ChatMessage(
     val generatingImage: Boolean = false,
     val model: String? = null,
     val streaming: Boolean = false,
-)
+    val uiKey: Long? = null,
+) {
+    /**
+     * UI 身份（列表 key、查看器定位）。流式占位落库时 id 会换成 store 行 id，key 沿用占位的，
+     * 同一条回复从流式到定稿始终是同一个列表项，不会被销毁重建。
+     * 不做成带默认值的构造参数：`copy(id = …)` 不会重算默认值，key 会停在旧 id 上。
+     */
+    val key: Long get() = uiKey ?: id
+}

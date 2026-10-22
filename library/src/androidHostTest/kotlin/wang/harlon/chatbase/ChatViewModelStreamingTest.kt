@@ -107,6 +107,61 @@ class ChatViewModelStreamingTest {
     }
 
     @Test
+    fun `流式到定稿 key 不变：id 换成落库行，列表项身份保持`() = runTest(dispatcher) {
+        val release = CompletableDeferred<Unit>()
+        val engine = object : ChatEngine {
+            override suspend fun send(
+                history: List<ChatMessage>,
+                onDelta: (String) -> Unit,
+                search: Boolean,
+                onSearch: (wang.harlon.chatbase.model.SearchEvent) -> Unit,
+                imageGeneration: Boolean,
+                onImageGeneration: (wang.harlon.chatbase.model.ImageGenerationEvent) -> Unit,
+            ): String {
+                onDelta("你")
+                release.await()
+                return "你好"
+            }
+        }
+        val viewModel = vm(engine)
+        viewModel.sendText("hi")
+        advanceUntilIdle()
+        val streamingReply = viewModel.uiState.value.messages.last()
+        release.complete(Unit)
+        advanceUntilIdle()
+        val finalReply = viewModel.uiState.value.messages.last()
+        assertTrue(finalReply.id != streamingReply.id)
+        assertEquals(streamingReply.key, finalReply.key)
+    }
+
+    @Test
+    fun `失败的错误条也沿用占位 key`() = runTest(dispatcher) {
+        val engine = ScriptedEngine(failWith = ChatError(ChatErrorCategory.SERVER, code = "stream_interrupted"))
+        val keys = mutableListOf<Long>()
+        val viewModel = vm(engine)
+        viewModel.sendText("hi")
+        // 占位刚追加、引擎尚未跑完时记下它的 key
+        dispatcher.scheduler.runCurrent()
+        viewModel.uiState.value.messages.lastOrNull { it.role == Role.ASSISTANT }?.let { keys += it.key }
+        advanceUntilIdle()
+        val failed = viewModel.uiState.value.messages.last()
+        assertNotNull(failed.error)
+        assertEquals(keys.single(), failed.key)
+    }
+
+    @Test
+    fun `连续两轮回复的 key 互不相同，列表 key 唯一`() = runTest(dispatcher) {
+        val viewModel = vm(ScriptedEngine())
+        viewModel.sendText("一")
+        advanceUntilIdle()
+        viewModel.sendText("二")
+        advanceUntilIdle()
+        val keys = viewModel.uiState.value.messages.map { it.key }
+        assertEquals(4, keys.size)
+        assertEquals(keys.size, keys.toSet().size)
+    }
+
+    @Test
     fun `失败时已渲染部分丢弃：content 清空、挂错误条`() = runTest(dispatcher) {
         val engine = ScriptedEngine(failWith = ChatError(ChatErrorCategory.SERVER, code = "stream_interrupted"))
         val viewModel = vm(engine)
