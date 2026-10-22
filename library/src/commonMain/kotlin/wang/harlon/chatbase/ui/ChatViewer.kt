@@ -16,9 +16,12 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import wang.harlon.chatbase.model.ChatMessage
 import wang.harlon.chatbase.model.Role
 
-/** 压在聊天页之上的全屏查看器。文字放大只记消息 id，内容每帧从消息列表取，流式中打开会跟着长。 */
+/**
+ * 压在聊天页之上的全屏查看器。文字放大只记消息 key，内容每帧从消息列表取，流式中打开会跟着长；
+ * 记 key 而不是 id：流式落库时 id 会换，key 不变，查看器不会在回复结束时自己关掉。
+ */
 sealed interface ChatViewer {
-    data class Text(val messageId: Long) : ChatViewer
+    data class Text(val messageKey: Long) : ChatViewer
     data class Image(val model: Any) : ChatViewer
 }
 
@@ -40,7 +43,7 @@ internal fun ChatViewerOverlay(
     AnimatedVisibility(visible = viewer != null, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
         when (val current = shown) {
             is ChatViewer.Text -> {
-                val message = messages.firstOrNull { it.id == current.messageId }
+                val message = messages.firstOrNull { it.key == current.messageKey }
                 LaunchedEffect(message == null) { if (message == null) onDismiss() }
                 if (message != null) {
                     TextViewer(

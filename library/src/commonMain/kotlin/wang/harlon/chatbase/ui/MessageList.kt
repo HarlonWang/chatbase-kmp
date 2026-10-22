@@ -52,7 +52,7 @@ fun MessageList(
         if (showTyping) {
             item(key = "typing") { TypingIndicator() }
         }
-        items(visible.asReversed(), key = { it.id }) { message ->
+        items(visible.asReversed(), key = { it.key }) { message ->
             MessageItem(
                 message = message,
                 onRetry = { onRetry(message) },
