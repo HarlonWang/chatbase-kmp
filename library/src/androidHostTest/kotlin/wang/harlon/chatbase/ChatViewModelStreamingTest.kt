@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -21,6 +22,7 @@ import wang.harlon.chatbase.model.ChatError
 import wang.harlon.chatbase.model.ChatModelsResponse
 import wang.harlon.chatbase.model.ChatErrorCategory
 import wang.harlon.chatbase.model.ChatMessage
+import wang.harlon.chatbase.model.Role
 
 /** ChatViewModel 流式渲染、失败重试与埋点配对。 */
 class ChatViewModelStreamingTest {
@@ -69,6 +71,110 @@ class ChatViewModelStreamingTest {
         assertEquals("你好", state.messages.last().content)
         assertNull(state.messages.last().error)
         assertTrue(!state.isSending)
+    }
+
+    @Test
+    fun `流式期间消息标记 streaming，定稿后清除`() = runTest(dispatcher) {
+        val release = CompletableDeferred<Unit>()
+        val engine = object : ChatEngine {
+            override suspend fun send(
+                history: List<ChatMessage>,
+                onDelta: (String) -> Unit,
+                search: Boolean,
+                onSearch: (wang.harlon.chatbase.model.SearchEvent) -> Unit,
+                imageGeneration: Boolean,
+                onImageGeneration: (wang.harlon.chatbase.model.ImageGenerationEvent) -> Unit,
+            ): String {
+                onDelta("你")
+                release.await()
+                return "你好"
+            }
+        }
+        val viewModel = vm(engine)
+        viewModel.sendText("hi")
+        advanceUntilIdle()
+        val streamingReply = viewModel.uiState.value.messages.last()
+        assertEquals(Role.ASSISTANT, streamingReply.role)
+        assertEquals("你", streamingReply.content)
+        assertTrue(streamingReply.streaming)
+        release.complete(Unit)
+        advanceUntilIdle()
+        val finalReply = viewModel.uiState.value.messages.last()
+        assertEquals(Role.ASSISTANT, finalReply.role)
+        assertEquals("你好", finalReply.content)
+        assertTrue(!finalReply.streaming)
+        assertEquals(2, viewModel.uiState.value.messages.size)
+    }
+
+    @Test
+    fun `流式到定稿 key 不变：id 换成落库行，列表项身份保持`() = runTest(dispatcher) {
+        val release = CompletableDeferred<Unit>()
+        val engine = object : ChatEngine {
+            override suspend fun send(
+                history: List<ChatMessage>,
+                onDelta: (String) -> Unit,
+                search: Boolean,
+                onSearch: (wang.harlon.chatbase.model.SearchEvent) -> Unit,
+                imageGeneration: Boolean,
+                onImageGeneration: (wang.harlon.chatbase.model.ImageGenerationEvent) -> Unit,
+            ): String {
+                onDelta("你")
+                release.await()
+                return "你好"
+            }
+        }
+        val viewModel = vm(engine)
+        viewModel.sendText("hi")
+        advanceUntilIdle()
+        val streamingReply = viewModel.uiState.value.messages.last()
+        release.complete(Unit)
+        advanceUntilIdle()
+        val finalReply = viewModel.uiState.value.messages.last()
+        assertTrue(finalReply.id != streamingReply.id)
+        assertEquals(streamingReply.key, finalReply.key)
+    }
+
+    @Test
+    fun `失败的错误条也沿用占位 key`() = runTest(dispatcher) {
+        // 挂起的引擎：先在流式中途记下占位 key，再放行让它失败；同步抛错的引擎会在记录前就完成替换
+        val release = CompletableDeferred<Unit>()
+        val engine = object : ChatEngine {
+            override suspend fun send(
+                history: List<ChatMessage>,
+                onDelta: (String) -> Unit,
+                search: Boolean,
+                onSearch: (wang.harlon.chatbase.model.SearchEvent) -> Unit,
+                imageGeneration: Boolean,
+                onImageGeneration: (wang.harlon.chatbase.model.ImageGenerationEvent) -> Unit,
+            ): String {
+                onDelta("你")
+                release.await()
+                throw ChatException(ChatError(ChatErrorCategory.SERVER, code = "stream_interrupted"))
+            }
+        }
+        val viewModel = vm(engine)
+        viewModel.sendText("hi")
+        advanceUntilIdle()
+        val placeholder = viewModel.uiState.value.messages.last()
+        assertTrue(placeholder.streaming)
+        release.complete(Unit)
+        advanceUntilIdle()
+        val failed = viewModel.uiState.value.messages.last()
+        assertNotNull(failed.error)
+        assertTrue(failed.id != placeholder.id)
+        assertEquals(placeholder.key, failed.key)
+    }
+
+    @Test
+    fun `连续两轮回复的 key 互不相同，列表 key 唯一`() = runTest(dispatcher) {
+        val viewModel = vm(ScriptedEngine())
+        viewModel.sendText("一")
+        advanceUntilIdle()
+        viewModel.sendText("二")
+        advanceUntilIdle()
+        val keys = viewModel.uiState.value.messages.map { it.key }
+        assertEquals(4, keys.size)
+        assertEquals(keys.size, keys.toSet().size)
     }
 
     @Test

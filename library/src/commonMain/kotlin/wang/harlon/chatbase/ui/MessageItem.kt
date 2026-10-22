@@ -112,7 +112,7 @@ private fun UserMessage(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .widthIn(max = 300.dp)
-                    .doubleTapToEnlarge { onOpenViewer(ChatViewer.Text(message.id)) },
+                    .doubleTapToEnlarge { onOpenViewer(ChatViewer.Text(message.key)) },
             ) {
                 Text(
                     text = message.content,
@@ -203,8 +203,9 @@ private fun AssistantMessage(
             MarkdownText(
                 markdown = message.content,
                 textStyle = MaterialTheme.typography.bodyLarge,
+                streaming = message.streaming,
                 onImageClick = { onOpenViewer(ChatViewer.Image(it)) },
-                modifier = Modifier.doubleTapToEnlarge { onOpenViewer(ChatViewer.Text(message.id)) },
+                modifier = Modifier.doubleTapToEnlarge { onOpenViewer(ChatViewer.Text(message.key)) },
             )
             if (message.sources.isNotEmpty()) {
                 SourcesRow(message.sources)

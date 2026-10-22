@@ -175,7 +175,7 @@ class ChatApi(
      * 2xx 非 SSE（服务端降级非流式）整段作为一个 delta 兜底。
      * 流在 done 之前结束视为中途断流 → SERVER 可重试，已渲染部分由调用方丢弃。
      */
-    override suspend fun transcribe(path: String, durationMs: Long): Transcription {
+    override suspend fun transcribe(path: String, durationMs: Long): Transcription = withBackgroundTask("chatbase.transcribe") {
         val lang = resolveLang()
         try {
             val bytes = FileSystem.SYSTEM.read(path.toPath()) { readByteArray() }
@@ -200,7 +200,7 @@ class ChatApi(
             }
             if (response.status != HttpStatusCode.OK) throw toChatException(response, sentAsLoggedIn)
             val parsed = json.decodeFromString<TranscribeResponse>(response.bodyAsText())
-            return Transcription(parsed.text, parsed.languages)
+            Transcription(parsed.text, parsed.languages)
         } catch (e: ChatException) {
             logFailure("chat/transcribe", e.error)
             throw e
@@ -219,11 +219,11 @@ class ChatApi(
         onSearch: (SearchEvent) -> Unit = {},
         onImageGeneration: (ImageGenerationEvent) -> Unit = {},
         configure: HttpRequestBuilder.() -> Unit,
-    ): String {
+    ): String = withBackgroundTask("chatbase.$path") {
         try {
             // 发送时的登录自认知：与 429 的 tier=anonymous 对照可识别「token 缺失/被拒被静默降级」
             val sentAsLoggedIn = chatHost.isLoggedInNow()
-            return client.preparePost("$baseUrl/$path") {
+            client.preparePost("$baseUrl/$path") {
                 header("X-Install-Id", chatHost.installId())
                 contentType(ContentType.Application.Json)
                 timeout { requestTimeoutMillis = STREAM_REQUEST_TIMEOUT_MS }

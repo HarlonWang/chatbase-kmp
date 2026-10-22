@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
  * 性能要点：`remember(markdown)` 缓存解析后的 AST，非流式下整段内容终态后只解析一次，
  * 列表滚动重组不会重复解析。
  *
+ * @param streaming 内容仍在流式追加：末尾未写完的行按半截处理，不让它把已渲染的内容改成别的结构
  * @param onImageClick 段落里 http/https 图片被点击时回调（入参为图片 URL），默认无动作
  */
 @Composable
@@ -49,9 +50,12 @@ fun MarkdownText(
     markdown: String,
     modifier: Modifier = Modifier,
     textStyle: TextStyle = LocalTextStyle.current,
+    streaming: Boolean = false,
     onImageClick: (String) -> Unit = {},
 ) {
-    val document = remember(markdown) { parseMarkdown(markdown) }
+    val document = remember(markdown, streaming) {
+        parseMarkdown(if (streaming) markdown.withoutPendingSetextUnderline() else markdown)
+    }
     Column(modifier = modifier) {
         MarkdownBlocks(document.blocks, textStyle, onImageClick)
     }

@@ -61,7 +61,8 @@ enum class VoiceNotice { EMPTY, FAILED, PRO_REQUIRED }
  *   [locked] 排队，同一时刻只有一个在跑，挂起点之间不会被别的操作交错。
  * - **单一真相源**：内存里只保留当前会话的消息（[uiState].messages 即真相），历史归 store；
  *   消息 id 就是 store 行 id（全局唯一），唯一的例外是流式占位（固定 [PLACEHOLDER_ID]，
- *   终局时被落库行替换）。
+ *   终局时被落库行替换）。UI 按 [ChatMessage.key] 认消息：占位各自取一个负数 key，
+ *   落库替换时沿用，列表项与查看器不因换 id 而丢失。
  * - **切走即取消**：在途流只属于当前会话（切会话/新会话都会取消它，已渲染部分
  *   落为可重试的中断错误行）。因此任何时刻至多一条在途流（[inFlight]）。
  *
@@ -147,6 +148,9 @@ class ChatViewModel(
     private class InFlightSend(val threadId: Long, val startedAt: Long, val job: Job)
 
     private var inFlight: InFlightSend? = null
+
+    /** 占位 key 递减分配：store 行 id 恒为正，负值不会撞号；每次流式取新值，前后两条回复的列表项不会撞 key */
+    private var placeholderKey = 0L
 
     init {
         viewModelScope.launch {
@@ -359,7 +363,7 @@ class ChatViewModel(
     private fun startStream(threadId: Long, search: Boolean, imageGeneration: Boolean) {
         val startedAt = epochMillis()
         _uiState.update {
-            it.copy(messages = it.messages + ChatMessage(PLACEHOLDER_ID, Role.ASSISTANT, ""))
+            it.copy(messages = it.messages + ChatMessage(PLACEHOLDER_ID, Role.ASSISTANT, "", streaming = true, uiKey = --placeholderKey))
         }
         val job = viewModelScope.launch {
             val result = runCatching {
@@ -479,10 +483,10 @@ class ChatViewModel(
         _uiState.update { s -> s.copy(messages = s.messages.filterNot { it.id == messageId }) }
     }
 
-    // 流式占位条 → 落库后的真实消息（成功或错误条）
+    // 流式占位条 → 落库后的真实消息（成功或错误条），沿用占位的 key
     private fun replacePlaceholder(replacement: ChatMessage) {
         _uiState.update { s ->
-            s.copy(messages = s.messages.map { if (it.id == PLACEHOLDER_ID) replacement else it })
+            s.copy(messages = s.messages.map { if (it.id == PLACEHOLDER_ID) replacement.copy(uiKey = it.key) else it })
         }
     }
 
