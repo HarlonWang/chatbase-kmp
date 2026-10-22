@@ -41,12 +41,20 @@ object ChatErrors {
             error
         }
 
-    /** 传输/未知异常 → 分类。ktor 公共超时先判，平台细分交给 expect。 */
+    /**
+     * 传输/未知异常 → 分类。ktor 公共超时先判，平台细分交给 expect。
+     * 沿 cause 链由内向外找第一个认得出的：ktor 常把底层异常包一层再抛（如 iOS 断流时
+     * ClosedByteChannelException 包着 DarwinHttpRequestException），最内层的类型最具体。
+     */
     fun forThrowable(t: Throwable): ChatError {
-        val category = when {
-            t is HttpRequestTimeoutException -> ChatErrorCategory.TIMEOUT
-            else -> classifyTransportException(t) ?: ChatErrorCategory.UNKNOWN
-        }
+        val chain = generateSequence(t) { it.cause }.take(MAX_CAUSE_DEPTH).toList()
+        val category = chain.asReversed().firstNotNullOfOrNull(::classifyOne) ?: ChatErrorCategory.UNKNOWN
         return ChatError(category, detail = t.toString())
     }
+
+    private fun classifyOne(t: Throwable): ChatErrorCategory? =
+        if (t is HttpRequestTimeoutException) ChatErrorCategory.TIMEOUT else classifyTransportException(t)
+
+    /** 防御自引用 / 环形 cause */
+    private const val MAX_CAUSE_DEPTH = 8
 }
