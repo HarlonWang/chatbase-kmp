@@ -1,5 +1,7 @@
 package wang.harlon.chatbase.engine
 
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import wang.harlon.chatbase.model.ChatError
 import wang.harlon.chatbase.model.ChatErrorCategory
@@ -52,8 +54,11 @@ object ChatErrors {
         return ChatError(category, detail = t.toString())
     }
 
-    private fun classifyOne(t: Throwable): ChatErrorCategory? =
-        if (t is HttpRequestTimeoutException) ChatErrorCategory.TIMEOUT else classifyTransportException(t)
+    /** ktor 客户端的超时异常（HttpTimeout 插件抛出，iOS 上是独立类，不同于 ktor-network 的同名类）先判 */
+    private fun classifyOne(t: Throwable): ChatErrorCategory? = when (t) {
+        is HttpRequestTimeoutException, is SocketTimeoutException, is ConnectTimeoutException -> ChatErrorCategory.TIMEOUT
+        else -> classifyTransportException(t)
+    }
 
     /** 防御自引用 / 环形 cause */
     private const val MAX_CAUSE_DEPTH = 8
