@@ -359,7 +359,7 @@ class ChatViewModel(
     private fun startStream(threadId: Long, search: Boolean, imageGeneration: Boolean) {
         val startedAt = epochMillis()
         _uiState.update {
-            it.copy(messages = it.messages + ChatMessage(PLACEHOLDER_ID, Role.ASSISTANT, ""))
+            it.copy(messages = it.messages + ChatMessage(PLACEHOLDER_ID, Role.ASSISTANT, "", streaming = true))
         }
         val job = viewModelScope.launch {
             val result = runCatching {

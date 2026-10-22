@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -69,6 +70,32 @@ class ChatViewModelStreamingTest {
         assertEquals("你好", state.messages.last().content)
         assertNull(state.messages.last().error)
         assertTrue(!state.isSending)
+    }
+
+    @Test
+    fun `流式期间消息标记 streaming，定稿后清除`() = runTest(dispatcher) {
+        val release = CompletableDeferred<Unit>()
+        val engine = object : ChatEngine {
+            override suspend fun send(
+                history: List<ChatMessage>,
+                onDelta: (String) -> Unit,
+                search: Boolean,
+                onSearch: (wang.harlon.chatbase.model.SearchEvent) -> Unit,
+                imageGeneration: Boolean,
+                onImageGeneration: (wang.harlon.chatbase.model.ImageGenerationEvent) -> Unit,
+            ): String {
+                onDelta("你")
+                release.await()
+                return "你"
+            }
+        }
+        val viewModel = vm(engine)
+        viewModel.sendText("hi")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.messages.last().streaming)
+        release.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(!viewModel.uiState.value.messages.last().streaming)
     }
 
     @Test
