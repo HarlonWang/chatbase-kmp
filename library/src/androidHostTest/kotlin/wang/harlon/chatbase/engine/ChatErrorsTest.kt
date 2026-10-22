@@ -2,6 +2,8 @@ package wang.harlon.chatbase.engine
 
 import wang.harlon.chatbase.model.ChatError
 import wang.harlon.chatbase.model.ChatErrorCategory
+import io.ktor.utils.io.ClosedByteChannelException
+import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -86,6 +88,40 @@ class ChatErrorsTest {
         assertEquals(
             ChatErrorCategory.NETWORK,
             ChatErrors.forThrowable(ConnectException("refused")).category,
+        )
+    }
+
+    /** ktor 会把底层异常包一层再抛（iOS 断流即 ClosedByteChannelException 包 DarwinHttpRequestException），
+     *  分类要看穿包装，否则断网被误报为 UNKNOWN。 */
+    @Test
+    fun wrapped_network_cause_is_network() {
+        assertEquals(
+            ChatErrorCategory.NETWORK,
+            ChatErrors.forThrowable(RuntimeException("wrapper", UnknownHostException("no dns"))).category,
+        )
+    }
+
+    /** 外层 IOException 本身也认得（NETWORK），但内层 SocketTimeout 更具体，应以内层为准。 */
+    @Test
+    fun innermost_cause_wins_over_outer_match() {
+        assertEquals(
+            ChatErrorCategory.TIMEOUT,
+            ChatErrors.forThrowable(IOException("closed", SocketTimeoutException("timeout"))).category,
+        )
+    }
+
+    /** iOS 真机切后台超过宽限期后回来：ktor 读超时被包在 ClosedByteChannelException 里抛出 */
+    @Test
+    fun socket_timeout_wrapped_in_closed_channel_is_timeout() {
+        val e = ClosedByteChannelException(SocketTimeoutException("Socket timeout has expired"))
+        assertEquals(ChatErrorCategory.TIMEOUT, ChatErrors.forThrowable(e).category)
+    }
+
+    @Test
+    fun unrecognized_cause_falls_back_to_outer_match() {
+        assertEquals(
+            ChatErrorCategory.NETWORK,
+            ChatErrors.forThrowable(IOException("closed", IllegalStateException("x"))).category,
         )
     }
 
