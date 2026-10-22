@@ -22,6 +22,7 @@ import wang.harlon.chatbase.model.ChatError
 import wang.harlon.chatbase.model.ChatModelsResponse
 import wang.harlon.chatbase.model.ChatErrorCategory
 import wang.harlon.chatbase.model.ChatMessage
+import wang.harlon.chatbase.model.Role
 
 /** ChatViewModel 流式渲染、失败重试与埋点配对。 */
 class ChatViewModelStreamingTest {
@@ -86,16 +87,23 @@ class ChatViewModelStreamingTest {
             ): String {
                 onDelta("你")
                 release.await()
-                return "你"
+                return "你好"
             }
         }
         val viewModel = vm(engine)
         viewModel.sendText("hi")
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.messages.last().streaming)
+        val streamingReply = viewModel.uiState.value.messages.last()
+        assertEquals(Role.ASSISTANT, streamingReply.role)
+        assertEquals("你", streamingReply.content)
+        assertTrue(streamingReply.streaming)
         release.complete(Unit)
         advanceUntilIdle()
-        assertTrue(!viewModel.uiState.value.messages.last().streaming)
+        val finalReply = viewModel.uiState.value.messages.last()
+        assertEquals(Role.ASSISTANT, finalReply.role)
+        assertEquals("你好", finalReply.content)
+        assertTrue(!finalReply.streaming)
+        assertEquals(2, viewModel.uiState.value.messages.size)
     }
 
     @Test

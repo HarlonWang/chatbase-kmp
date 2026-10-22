@@ -1,7 +1,11 @@
 package wang.harlon.chatbase.markdown
 
-/** setext 标题下划线：至多 3 个空格缩进，一串 `=` 或一串 `-`，尾随空白。 */
-private val SETEXT_UNDERLINE = Regex("^ {0,3}(=+|-+)[ \\t]*$")
+/**
+ * 可能成为 setext 下划线的行：行首只有空白和引用符 `>`（覆盖引用块、嵌套列表），之后一串 `=` 或一串 `-`。
+ * 故意放宽、不看上下文：误判只是让一行还没写完的内容晚一块显示（如未闭合代码块里的 `---`），
+ * 漏判才会让标题一跳一落。
+ */
+private val SETEXT_UNDERLINE = Regex("^[ \\t>]*(=+|-+)[ \\t]*$")
 
 /**
  * 流式中途，末尾还没写完的一行若恰好只有 `=` 或 `-`，会被 CommonMark 当成 setext 下划线，

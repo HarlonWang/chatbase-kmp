@@ -47,8 +47,8 @@ import androidx.compose.ui.unit.dp
 fun MarkdownText(
     markdown: String,
     modifier: Modifier = Modifier,
-    streaming: Boolean = false,
     textStyle: TextStyle = LocalTextStyle.current,
+    streaming: Boolean = false,
     onImageClick: (String) -> Unit = {},
 ) {
     val document = remember(markdown, streaming) {
