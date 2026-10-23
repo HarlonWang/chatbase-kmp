@@ -33,4 +33,14 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
+    buildTypes {
+        // :benchmark 的目标：不可调试 + R8，帧时间才接近用户手里的 release；debug 签名免配密钥
+        create("benchmark") {
+            initWith(getByName("release"))
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
+    }
 }

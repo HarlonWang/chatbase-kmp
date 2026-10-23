@@ -10,9 +10,11 @@ import wang.harlon.chatbase.model.ChatMessage
  */
 class FakeChatEngine(
     private val chunkDelayMillis: Long = 30L,
+    /** 基准用：固定回复序列，为 null 时按下面的默认三条轮换。 */
+    replies: List<String>? = null,
 ) : ChatEngine {
 
-    private val replies = listOf(
+    private val replies = replies ?: listOf(
         SampleData.richMarkdown,
         SampleData.mathMarkdown,
         "收到 👍 这是一段**纯文本 + `行内代码`**的简短回复，用来演示不同长度消息的排版。\n\n" +

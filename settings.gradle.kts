@@ -26,6 +26,7 @@ dependencyResolutionManagement {
 rootProject.name = "chatbase-kmp"
 include(":library")
 include(":sample")
+include(":benchmark")
 
 // 本地源码 ↔ Maven 坐标双轨（与 TrendingAI / Tono 同一套）：在 local.properties 里写 `<库>.dir=<路径>` 即启用 composite build，
 // 本地构建直接吃那个库的源码；CI 没有 local.properties，一律走 libs.versions.toml 的 Maven 版本。
