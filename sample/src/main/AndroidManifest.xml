@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="Chat Demo"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Macrobenchmark 需要从 shell 采集非 debug 包的帧时间与内存 -->
+        <profileable
+            android:shell="true"
+            tools:targetApi="29" />
         <activity
             android:name=".ChatDemoActivity"
             android:exported="true"
