@@ -18,12 +18,15 @@ class MarkdownParseBenchmark {
         val report = buildString {
             appendLine("sample\tchars\tmedian_us\tp90_us")
             SAMPLES.forEach { (name, text) ->
-                repeat(WARMUP) { parseMarkdown(text) }
+                // 累加块数并校验：解析结果被用到，JIT 不会把解析当死代码删掉，样本解析成空也会立刻暴露
+                var blocks = 0
+                repeat(WARMUP) { blocks += parseMarkdown(text).blocks.size }
                 val samples = LongArray(RUNS) {
                     val start = System.nanoTime()
-                    parseMarkdown(text)
+                    blocks += parseMarkdown(text).blocks.size
                     System.nanoTime() - start
                 }.sorted()
+                check(blocks > 0) { "$name 解析结果为空" }
                 val median = samples[RUNS / 2] / 1000.0
                 val p90 = samples[RUNS * 9 / 10] / 1000.0
                 appendLine("$name\t${text.length}\t${"%.1f".format(median)}\t${"%.1f".format(p90)}")

@@ -46,6 +46,8 @@ import wang.harlon.chatbase.VoiceNotice
 import wang.harlon.chatbase.engine.ChatApi
 import wang.harlon.chatbase.engine.ChatEngine
 import wang.harlon.chatbase.engine.VoiceTranscriber
+import wang.harlon.chatbase.model.ChatModelsProvider
+import wang.harlon.chatbase.model.ChatModelsResponse
 import wang.harlon.chatbase.model.catalogProviderNames
 import wang.harlon.chatbase.host.chatHost
 import wang.harlon.chatbase.resources.chat_voice_empty
@@ -62,6 +64,7 @@ data class ChatSuggestion(val label: String, val prompt: String)
  *
  * @param engine 默认正式引擎 [ChatApi]；Demo 可注入 FakeChatEngine。
  * @param persistent Demo/预览可关（纯内存模式）
+ * @param loadModels 模型目录来源；默认拉线上目录。离线 Demo、性能基准传固定目录，避免网络请求与目录到达后的重组
  * @param navigationIcon 顶栏左侧图标；null 时为调用 [onBack] 的返回箭头。chat 作为宿主首页时用它放设置入口。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,11 +76,12 @@ fun ChatScreen(
     persistent: Boolean = true,
     suggestions: List<ChatSuggestion> = emptyList(),
     transcriber: VoiceTranscriber? = ChatApi.sharedTranscriber,
+    loadModels: suspend () -> ChatModelsResponse = { ChatModelsProvider.get() },
     navigationIcon: (@Composable () -> Unit)? = null,
 ) {
     val store = if (persistent) rememberDefaultChatStore() else remember { InMemoryChatStore() }
     val viewModel: ChatViewModel = viewModel(key = "chat") {
-        ChatViewModel(engine, initialMessages, store, transcriber = transcriber)
+        ChatViewModel(engine, initialMessages, store, transcriber = transcriber, loadModels = loadModels)
     }
     val state by viewModel.uiState.collectAsState()
     val showNotice = rememberShowNotice()

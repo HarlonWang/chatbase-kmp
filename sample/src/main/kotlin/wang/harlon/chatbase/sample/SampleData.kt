@@ -51,20 +51,20 @@ object SampleData {
 
     /** Demo 打开即展示的初始会话。 */
     val messages: List<ChatMessage> = listOf(
-        ChatMessage(1, Role.USER, "用一句话介绍 Kotlin 协程，并给个例子"),
-        ChatMessage(2, Role.ASSISTANT, richMarkdown),
-        ChatMessage(3, Role.USER, "和 JavaScript 的 async/await 有什么区别？"),
+        ChatMessage(SAMPLE_MESSAGE_ID_BASE + 1, Role.USER, "用一句话介绍 Kotlin 协程，并给个例子"),
+        ChatMessage(SAMPLE_MESSAGE_ID_BASE + 2, Role.ASSISTANT, richMarkdown),
+        ChatMessage(SAMPLE_MESSAGE_ID_BASE + 3, Role.USER, "和 JavaScript 的 async/await 有什么区别？"),
         ChatMessage(
-            4, Role.ASSISTANT,
+            SAMPLE_MESSAGE_ID_BASE + 4, Role.ASSISTANT,
             "主要区别在于**结构化并发**：\n\n" +
                 "- Kotlin 协程有 `CoroutineScope`，父取消会级联取消子协程\n" +
                 "- JS 的 `Promise` 没有内建取消传播\n" +
                 "- 协程可切换调度器（`withContext`），JS 单线程事件循环\n\n" +
                 "简言之：协程更像*可取消、可调度*的 async/await。",
         ),
-        ChatMessage(5, Role.USER, "发几张图看看：独立图、图文混排、还有一张加载失败的"),
+        ChatMessage(SAMPLE_MESSAGE_ID_BASE + 5, Role.USER, "发几张图看看：独立图、图文混排、还有一张加载失败的"),
         ChatMessage(
-            6, Role.ASSISTANT,
+            SAMPLE_MESSAGE_ID_BASE + 6, Role.ASSISTANT,
             // 头像 CDN 与首页头像同域，模拟器可达；example.com 返回 HTML 触发解码失败
             "独立成段的图片：\n\n" +
                 "![Octocat](https://avatars.githubusercontent.com/u/583231?s=600)\n\n" +
@@ -73,7 +73,10 @@ object SampleData {
                 "![加载失败的图](https://example.com/broken.png)",
         ),
     )
-
-    /** 末位 id，供 ViewModel 续号。 */
-    val lastId: Long = messages.maxOf { it.id }
 }
+
+/**
+ * 样例会话的消息 id 起点。内存库给新消息从 1 开始分配 id，样例占用一段远离它的高位，
+ * 发新消息时列表 key 不会和样例撞上（id 相同的两条同屏时 LazyColumn 会直接崩溃）。
+ */
+internal const val SAMPLE_MESSAGE_ID_BASE = 1_000_000L

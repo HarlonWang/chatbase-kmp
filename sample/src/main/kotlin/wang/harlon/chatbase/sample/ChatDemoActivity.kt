@@ -10,6 +10,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import wang.harlon.chatbase.host.chatHost
 import wang.harlon.chatbase.host.isChatHostInstalled
+import wang.harlon.chatbase.model.ChatModelsProvider
+import wang.harlon.chatbase.model.ChatModelsResponse
 import wang.harlon.chatbase.ui.ChatScreen
 
 /**
@@ -74,6 +76,8 @@ private fun DemoContent(real: Boolean, bench: BenchConfig, onBack: () -> Unit) {
             // 纯内存：假引擎的样例会话不落真库
             persistent = false,
             transcriber = null,
+            // 基准不拉线上模型目录：每轮冷启动都会重新请求，目录到达时顶栏重组，干扰帧时间与启动耗时
+            loadModels = if (bench.scenario != null) ({ ChatModelsResponse() }) else ({ ChatModelsProvider.get() }),
         )
     }
 }
