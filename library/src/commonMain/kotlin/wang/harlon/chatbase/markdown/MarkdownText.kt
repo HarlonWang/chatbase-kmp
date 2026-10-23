@@ -2,6 +2,7 @@ package wang.harlon.chatbase.markdown
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -216,12 +217,14 @@ private fun InlineText(
     }
     val config = rememberMathConfig(style)
     val measurer = rememberMathMeasurer(config)
+    // 与绘制时的系统主题一致，占位内容才会直接画预测量结果，不再按另一种主题重测
+    val dark = isSystemInDarkTheme()
     // 字体异步加载完成后 measurer 换新实例，公式随之按真正的数学字体重新测量
-    val (text, inlineContent) = remember(nodes, styles, measurer, config) {
+    val (text, inlineContent) = remember(nodes, styles, measurer, config, dark) {
         val content = LinkedHashMap<String, InlineTextContent>()
         val annotated = buildAnnotatedString {
             appendInline(nodes, styles) { latex ->
-                val inline = measurer.inlineContent(latex, config)
+                val inline = measurer.inlineContent(latex, config, dark)
                 if (inline == null) {
                     withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = styles.codeBackground)) {
                         append(latex)

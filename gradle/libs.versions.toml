@@ -34,7 +34,7 @@ vanniktechMavenPublish = "0.37.0"
 # 设置 UI 基元（卡片组圆角规则）所在的库；改了它必须发版并 bump 这里
 appsettings-kmp = "0.2.1"
 # LaTeX 公式渲染（纯 Kotlin + Compose，KaTeX 字体）。上游按 Kotlin 2.3.10 / CMP 1.10.3 构建，升级工具链后要重跑两端真机
-latex = "1.6.1"
+latex = "1.6.2"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
