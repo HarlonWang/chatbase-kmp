@@ -10,7 +10,7 @@ import wang.harlon.chatbase.model.ChatMessage
  */
 class FakeChatEngine(
     private val chunkDelayMillis: Long = 30L,
-    /** 基准用：固定回复序列，为 null 时按下面的默认两条轮换。 */
+    /** 基准用：固定回复序列，为 null 时按下面的默认三条轮换。 */
     replies: List<String>? = null,
 ) : ChatEngine {
 
