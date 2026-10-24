@@ -37,4 +37,53 @@ class StreamingMarkdownTest {
             "",
         ).forEach { assertEquals(it, it.withoutPendingSetextUnderline()) }
     }
+
+    private fun stream(md: String) = parseMarkdown(md, streaming = true).blocks
+
+    private val pending = MdBlock.Math("", pending = true)
+
+    @Test
+    fun unclosed_display_math_becomes_pending_block() {
+        assertEquals(
+            listOf(MdBlock.Paragraph(listOf(MdInline.Text("前文"))), MdBlock.Math("\\begin{pmatrix} a", pending = true)),
+            stream("前文\n\n\$\$\n\\begin{pmatrix} a"),
+        )
+        assertEquals(MdBlock.Math("x =", pending = true), stream("前文\n\n\\[\nx = ").last())
+        assertEquals(pending, stream("前文\n\n\$\$").last()) // 只吐出了开头定界符
+        // 前一个已闭合，后一个未闭合
+        assertEquals(listOf(MdBlock.Math("a"), MdBlock.Math("b", pending = true)), stream("\$\$a\$\$\n\n\$\$\nb"))
+    }
+
+    @Test
+    fun pending_math_stays_in_its_container() {
+        val quote = assertIs<MdBlock.Quote>(stream("> 说明\n>\n> \$\$x").single())
+        assertEquals(listOf(MdBlock.Paragraph(listOf(MdInline.Text("说明"))), MdBlock.Math("x", pending = true)), quote.blocks)
+
+        val list = assertIs<MdBlock.OrderedList>(stream("1. 步骤：\n\n   \$\$\n   x = ").single())
+        assertEquals(MdBlock.Math("x =", pending = true), list.items.single().last())
+
+        // 紧跟在正文下一行：和已闭合时一样，是段落里的块级公式
+        val paragraph = assertIs<MdBlock.Paragraph>(stream("前文\n\$\$\nx").single())
+        assertEquals(MdInline.Math("x", display = true, pending = true), paragraph.inline.last())
+    }
+
+    @Test
+    fun unclosed_delimiters_not_at_line_start_stay_text() {
+        listOf(
+            "[文档](https://example.test/\\[)", // 链接地址里
+            "价格 \$\$ 很贵", // 段落中间
+            "```\n\$\$\n", // 围栏代码块里
+            "`\$\$` 是块级定界符", // 行内代码里
+            "\$\$\n前文\n\n后文", // 跨空行，不是公式
+        ).forEach { md ->
+            assertEquals(parseMarkdown(md), parseMarkdown(md, streaming = true), md)
+        }
+    }
+
+    @Test
+    fun non_streaming_keeps_unclosed_delimiters_as_text() {
+        val blocks = parseMarkdown("前文\n\n\$\$\nx")
+        assertEquals(2, blocks.blocks.size)
+        assertIs<MdBlock.Paragraph>(blocks.blocks.last())
+    }
 }

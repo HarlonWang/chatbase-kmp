@@ -17,3 +17,4 @@ internal fun String.withoutPendingSetextUnderline(): String {
     if (lineStart == 0) return this
     return if (SETEXT_UNDERLINE.matches(substring(lineStart))) substring(0, lineStart) else this
 }
+

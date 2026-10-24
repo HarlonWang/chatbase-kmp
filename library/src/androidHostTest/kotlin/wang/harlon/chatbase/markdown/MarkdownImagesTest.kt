@@ -14,7 +14,7 @@ class MarkdownImagesTest {
 
     @Test
     fun `plain paragraph yields single text segment`() {
-        val segments = splitByImages(firstParagraph("hello **world**"))
+        val segments = splitInline(firstParagraph("hello **world**"))
 
         assertEquals(1, segments.size)
         val text = assertIs<InlineSegment.Text>(segments[0])
@@ -23,14 +23,14 @@ class MarkdownImagesTest {
 
     @Test
     fun `image-only paragraph yields single image segment`() {
-        val segments = splitByImages(firstParagraph("![screenshot](https://example.com/a.png)"))
+        val segments = splitInline(firstParagraph("![screenshot](https://example.com/a.png)"))
 
         assertEquals(listOf(InlineSegment.Image("https://example.com/a.png", "screenshot")), segments)
     }
 
     @Test
     fun `text before and after image is split into segments`() {
-        val segments = splitByImages(firstParagraph("看截图 ![shot](https://example.com/a.png) 如上"))
+        val segments = splitInline(firstParagraph("看截图 ![shot](https://example.com/a.png) 如上"))
 
         assertEquals(3, segments.size)
         assertEquals("看截图 ", assertIs<InlineSegment.Text>(segments[0]).text())
@@ -40,7 +40,7 @@ class MarkdownImagesTest {
 
     @Test
     fun `consecutive images yield consecutive image segments`() {
-        val segments = splitByImages(
+        val segments = splitInline(
             firstParagraph("![a](https://example.com/a.png)![b](http://example.com/b.png)"),
         )
 
@@ -55,7 +55,7 @@ class MarkdownImagesTest {
 
     @Test
     fun `relative path image stays in text segment`() {
-        val segments = splitByImages(firstParagraph("前缀 ![alt text](docs/a.png) 后缀"))
+        val segments = splitInline(firstParagraph("前缀 ![alt text](docs/a.png) 后缀"))
 
         assertEquals(1, segments.size)
         val text = assertIs<InlineSegment.Text>(segments[0])
@@ -64,14 +64,14 @@ class MarkdownImagesTest {
 
     @Test
     fun `empty alt falls back to empty string`() {
-        val segments = splitByImages(firstParagraph("![](https://example.com/a.png)"))
+        val segments = splitInline(firstParagraph("![](https://example.com/a.png)"))
 
         assertEquals(listOf(InlineSegment.Image("https://example.com/a.png", "")), segments)
     }
 
     @Test
     fun `styled alt text is flattened to plain text`() {
-        val segments = splitByImages(firstParagraph("![**bold** alt](https://example.com/a.png)"))
+        val segments = splitInline(firstParagraph("![**bold** alt](https://example.com/a.png)"))
 
         val image = assertIs<InlineSegment.Image>(segments.single())
         assertEquals("bold alt", image.alt)
@@ -79,7 +79,7 @@ class MarkdownImagesTest {
 
     @Test
     fun `non-http scheme stays in text segment`() {
-        val segments = splitByImages(firstParagraph("![f](file:///sdcard/a.png)"))
+        val segments = splitInline(firstParagraph("![f](file:///sdcard/a.png)"))
 
         assertTrue(segments.single() is InlineSegment.Text)
     }

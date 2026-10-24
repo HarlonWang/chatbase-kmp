@@ -31,7 +31,7 @@ private val parser: Parser = Parser.builder()
     .extensions(listOf(TablesExtension.create()))
     .build()
 
-actual fun parseMarkdown(markdown: String): MdDocument =
+internal actual fun parseMarkdownDialect(markdown: String): MdDocument =
     MdDocument(mapBlocks(parser.parse(markdown)))
 
 private fun Node.children(): List<Node> {

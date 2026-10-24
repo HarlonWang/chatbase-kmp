@@ -2,6 +2,7 @@ package wang.harlon.chatbase.markdown
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -40,7 +43,7 @@ import androidx.compose.ui.unit.dp
  * 性能要点：`remember(markdown)` 缓存解析后的 AST，非流式下整段内容终态后只解析一次，
  * 列表滚动重组不会重复解析。
  *
- * @param streaming 内容仍在流式追加：末尾未写完的行按半截处理，不让它把已渲染的内容改成别的结构
+ * @param streaming 内容仍在流式追加：末尾未写完的行与块级公式按半截处理，不让它把已渲染的内容改成别的结构
  * @param onImageClick 段落里 http/https 图片被点击时回调（入参为图片 URL），默认无动作
  */
 @Composable
@@ -52,7 +55,7 @@ fun MarkdownText(
     onImageClick: (String) -> Unit = {},
 ) {
     val document = remember(markdown, streaming) {
-        parseMarkdown(if (streaming) markdown.withoutPendingSetextUnderline() else markdown)
+        if (streaming) parseMarkdown(markdown.withoutPendingSetextUnderline(), streaming = true) else parseMarkdown(markdown)
     }
     Column(modifier = modifier) {
         MarkdownBlocks(document.blocks, textStyle, onImageClick)
@@ -83,21 +86,22 @@ private fun BlockNode(block: MdBlock, textStyle: TextStyle, onImageClick: (Strin
                 3 -> MaterialTheme.typography.titleMedium
                 else -> MaterialTheme.typography.titleSmall
             }.copy(fontWeight = FontWeight.Bold)
-            Text(buildInline(block.inline, inlineStyles), style = style)
+            InlineText(block.inline, style, inlineStyles)
         }
 
         is MdBlock.Paragraph -> {
-            val segments = splitByImages(block.inline)
-            if (segments.none { it is InlineSegment.Image }) {
-                Text(buildInline(block.inline, inlineStyles), style = textStyle)
+            val segments = splitInline(block.inline)
+            if (segments.all { it is InlineSegment.Text }) {
+                InlineText(block.inline, textStyle, inlineStyles)
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     segments.forEach { segment ->
                         when (segment) {
-                            is InlineSegment.Text ->
-                                Text(buildInline(segment.nodes, inlineStyles), style = textStyle)
+                            is InlineSegment.Text -> InlineText(segment.nodes, textStyle, inlineStyles)
                             is InlineSegment.Image ->
                                 MarkdownImage(url = segment.url, alt = segment.alt, onClick = onImageClick)
+                            is InlineSegment.Math ->
+                                if (segment.pending) PendingMathBlock(textStyle) else MathBlock(segment.latex, textStyle)
                         }
                     }
                 }
@@ -105,6 +109,8 @@ private fun BlockNode(block: MdBlock, textStyle: TextStyle, onImageClick: (Strin
         }
 
         is MdBlock.CodeBlock -> CodeBlock(code = block.literal, language = block.language)
+
+        is MdBlock.Math -> if (block.pending) PendingMathBlock(textStyle) else MathBlock(block.latex, textStyle)
 
         is MdBlock.BulletList -> ListBlock(block.items, textStyle, ordered = false, start = 1, onImageClick = onImageClick)
 
@@ -178,9 +184,10 @@ private fun TableRowView(cells: List<MdTableCell>, textStyle: TextStyle, styles:
                 MdAlign.END -> TextAlign.End
                 MdAlign.START -> TextAlign.Start
             }
-            Text(
-                buildInline(cell.inline, styles),
-                style = textStyle,
+            InlineText(
+                cell.inline,
+                textStyle,
+                styles,
                 textAlign = align,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 6.dp),
             )
@@ -191,19 +198,78 @@ private fun TableRowView(cells: List<MdTableCell>, textStyle: TextStyle, styles:
 /** inline 渲染所需的主题相关样式（在 @Composable 中取色后传入纯函数构建器）。 */
 private data class InlineStyles(val codeBackground: Color, val linkColor: Color)
 
-private fun buildInline(nodes: List<MdInline>, styles: InlineStyles): AnnotatedString = buildAnnotatedString {
-    appendInline(nodes, styles)
+/**
+ * 一段 inline 节点渲染成一个 `Text`。行内公式预测量后作为 `InlineTextContent` 占位嵌入，
+ * 测量失败的公式退回行内代码样式显示源码。
+ */
+@Composable
+private fun InlineText(
+    nodes: List<MdInline>,
+    style: TextStyle,
+    styles: InlineStyles,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null,
+) {
+    val hasMath = remember(nodes) { nodes.containsMath() }
+    if (!hasMath) {
+        Text(buildInline(nodes, styles), style = style, textAlign = textAlign, modifier = modifier)
+        return
+    }
+    val config = rememberMathConfig(style)
+    val measurer = rememberMathMeasurer(config)
+    // 与绘制时的系统主题一致，占位内容才会直接画预测量结果，不再按另一种主题重测
+    val dark = isSystemInDarkTheme()
+    // 字体异步加载完成后 measurer 换新实例，公式随之按真正的数学字体重新测量
+    val (text, inlineContent) = remember(nodes, styles, measurer, config, dark) {
+        val content = LinkedHashMap<String, InlineTextContent>()
+        val annotated = buildAnnotatedString {
+            appendInline(nodes, styles) { latex ->
+                val inline = measurer.inlineContent(latex, config, dark)
+                if (inline == null) {
+                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = styles.codeBackground)) {
+                        append(latex)
+                    }
+                } else {
+                    val id = "math:${content.size}"
+                    content[id] = inline
+                    appendInlineContent(id, latex)
+                }
+            }
+        }
+        annotated to content
+    }
+    Text(text, style = style, textAlign = textAlign, inlineContent = inlineContent, modifier = modifier)
 }
 
-private fun AnnotatedString.Builder.appendInline(nodes: List<MdInline>, styles: InlineStyles) {
+private fun List<MdInline>.containsMath(): Boolean = any { node ->
+    when (node) {
+        is MdInline.Math -> true
+        is MdInline.Emphasis -> node.children.containsMath()
+        is MdInline.Strong -> node.children.containsMath()
+        is MdInline.Link -> node.children.containsMath()
+        is MdInline.Image -> node.children.containsMath()
+        else -> false
+    }
+}
+
+private fun buildInline(nodes: List<MdInline>, styles: InlineStyles): AnnotatedString = buildAnnotatedString {
+    // 没有公式的路径：公式节点不会出现，兜底按源码追加
+    appendInline(nodes, styles) { latex -> append(latex) }
+}
+
+private fun AnnotatedString.Builder.appendInline(
+    nodes: List<MdInline>,
+    styles: InlineStyles,
+    appendMath: AnnotatedString.Builder.(latex: String) -> Unit,
+) {
     nodes.forEach { node ->
         when (node) {
             is MdInline.Text -> append(node.literal)
             is MdInline.Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                appendInline(node.children, styles)
+                appendInline(node.children, styles, appendMath)
             }
             is MdInline.Strong -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                appendInline(node.children, styles)
+                appendInline(node.children, styles, appendMath)
             }
             is MdInline.Code -> withStyle(
                 SpanStyle(fontFamily = FontFamily.Monospace, background = styles.codeBackground),
@@ -216,10 +282,13 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<MdInline>, styles: 
                         SpanStyle(color = styles.linkColor, textDecoration = TextDecoration.Underline),
                     ),
                 ),
-            ) { appendInline(node.children, styles) }
+            ) { appendInline(node.children, styles, appendMath) }
 
             // 无法块级展示的图片（标题/表格内、相对路径等）降级为 alt 文本
-            is MdInline.Image -> appendInline(node.children, styles)
+            is MdInline.Image -> appendInline(node.children, styles, appendMath)
+
+            // 标题、表格单元格里的块级公式没有独立一行可占，一律按行内渲染
+            is MdInline.Math -> appendMath(node.latex)
 
             MdInline.SoftBreak -> append(" ")
             MdInline.HardBreak -> append("\n")

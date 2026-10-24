@@ -14,7 +14,7 @@ import kotlinx.cinterop.toKString
  * C 节点树只存活于本函数内：遍历一次构建纯 Kotlin AST 后整树释放，指针不外逸。
  */
 @OptIn(ExperimentalForeignApi::class)
-actual fun parseMarkdown(markdown: String): MdDocument {
+internal actual fun parseMarkdownDialect(markdown: String): MdDocument {
     cmark_gfm_core_extensions_ensure_registered()
     val parser = cmark_parser_new(CMARK_OPT_DEFAULT) ?: return MdDocument(emptyList())
     try {
