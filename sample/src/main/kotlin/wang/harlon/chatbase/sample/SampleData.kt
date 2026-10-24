@@ -107,8 +107,8 @@ object SampleData {
                 "下面这张会加载失败，降级为可点链接：\n\n" +
                 "![加载失败的图](https://example.com/broken.png)",
         ),
-        ChatMessage(7, Role.USER, "推导一下二次方程的求根公式，顺便讲讲级数和矩阵"),
-        ChatMessage(8, Role.ASSISTANT, mathMarkdown),
+        ChatMessage(SAMPLE_MESSAGE_ID_BASE + 7, Role.USER, "推导一下二次方程的求根公式，顺便讲讲级数和矩阵"),
+        ChatMessage(SAMPLE_MESSAGE_ID_BASE + 8, Role.ASSISTANT, mathMarkdown),
     )
 }
 
