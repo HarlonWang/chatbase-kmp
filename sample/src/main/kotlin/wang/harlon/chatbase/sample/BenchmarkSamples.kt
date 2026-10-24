@@ -15,7 +15,7 @@ object BenchmarkSamples {
     private const val TURNS = 30
 
     /** 纯文本会话：段落 + 列表 + 行内代码，不含任何 `$` 和 `\`，走公式抽出的早退路径。 */
-    val plain: List<ChatMessage> = conversation { i ->
+    val plain: List<ChatMessage> by lazyConversation { i ->
         """
         ## 第 $i 节：结构化并发
 
@@ -33,7 +33,7 @@ object BenchmarkSamples {
     }
 
     /** 公式会话：每条回复 10 个行内公式 + 3 个块级公式，覆盖分数、根式、求和、积分、矩阵和定界符。 */
-    val math: List<ChatMessage> = conversation { i ->
+    val math: List<ChatMessage> by lazyConversation { i ->
         """
         ## 第 $i 题：级数与积分
 
@@ -58,7 +58,7 @@ object BenchmarkSamples {
     }
 
     /** 混合会话：真实回复形态，富文本、代码块、表格与公式交替出现，公式密度低于 [math]。 */
-    val mixed: List<ChatMessage> = conversation { i ->
+    val mixed: List<ChatMessage> by lazyConversation { i ->
         when (i % 3) {
             0 -> SAMPLE_RICH
             1 -> plain[1].content
@@ -81,10 +81,10 @@ object BenchmarkSamples {
     }
 
     /** 流式基准的长回复：一次吐完约 30 个公式，模拟真实模型推导题的输出。 */
-    val streamMath: String = (1..3).joinToString("\n\n") { math[1].content.replace("第 1 题", "第 $it 段") }
+    val streamMath: String by lazy { (1..3).joinToString("\n\n") { math[1].content.replace("第 1 题", "第 $it 段") } }
 
     /** 流式基准的对照回复：长度相当的纯文本。 */
-    val streamPlain: String = (1..3).joinToString("\n\n") { plain[1].content.replace("第 1 节", "第 $it 段") }
+    val streamPlain: String by lazy { (1..3).joinToString("\n\n") { plain[1].content.replace("第 1 节", "第 $it 段") } }
 
     fun messagesFor(scenario: String?): List<ChatMessage>? = when (scenario) {
         "plain" -> plain
@@ -100,16 +100,18 @@ object BenchmarkSamples {
         else -> null
     }
 
+    /** 各场景用到才生成：正常启动和单个场景的基准都不替其余样本付构建成本 */
+    private fun lazyConversation(reply: (Int) -> String) = lazy { conversation(reply) }
+
     private fun conversation(reply: (Int) -> String): List<ChatMessage> =
         (1..TURNS).flatMap { i ->
             listOf(
-                ChatMessage((i * 2 - 1).toLong(), Role.USER, "第 $i 个问题"),
-                ChatMessage((i * 2).toLong(), Role.ASSISTANT, reply(i)),
+                ChatMessage(SAMPLE_MESSAGE_ID_BASE + i * 2 - 1, Role.USER, "第 $i 个问题"),
+                ChatMessage(SAMPLE_MESSAGE_ID_BASE + i * 2, Role.ASSISTANT, reply(i)),
             )
         }
 
-    // getter 而非字段：object 按声明顺序初始化，mixed 在它之前就要用到
-    private val SAMPLE_RICH: String get() = """
+    private val SAMPLE_RICH = """
         # Kotlin 协程速览
 
         协程是 Kotlin 的**轻量级并发**方案，核心是 `suspend` 函数与结构化并发。

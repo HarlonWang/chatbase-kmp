@@ -89,8 +89,7 @@ class ChatBenchmarks {
     ) {
         requireForeground()
         device.wait(Until.findObject(By.pkg(PACKAGE).desc(SEND)), 5_000)?.click() ?: error("找不到发送按钮")
-        // 回复约 2000 字、每 30 ms 吐 24 字，3 秒内吐完；多等 2 秒覆盖终态的最后几次重组
-        Thread.sleep(5_000)
+        awaitStreamEnd()
     }
 
     /** 冷启动到首帧：会话打开时首屏的行内公式在主线程同步测量，会直接计入首帧时间。 */
@@ -144,6 +143,23 @@ class ChatBenchmarks {
         requireForeground()
     }
 
+    /**
+     * 等流式回复吐完。回复期间发送按钮禁用（输入非空且不忙才可发），所以先等它因发送变灰，
+     * 再往输入框填字，等它重新可用即回复结束；慢机上吐字跟不上节奏时也会等到真正结束，不会截掉尾段。
+     */
+    private fun MacrobenchmarkScope.awaitStreamEnd() {
+        check(device.wait(Until.hasObject(sendButton(enabled = false)), 5_000)) { "发送后按钮没有变灰" }
+        device.findObject(By.pkg(PACKAGE).clazz("android.widget.EditText"))?.text = "next"
+        check(device.wait(Until.hasObject(sendButton(enabled = true)), STREAM_TIMEOUT_MS)) {
+            "流式回复 $STREAM_TIMEOUT_MS ms 内没有结束"
+        }
+        // 终态还有几次重组（落库换 id、待定公式换成渲染结果），多等 1 秒一并计入
+        Thread.sleep(1_000)
+    }
+
+    /** 发送按钮：描述挂在图标上，可用状态在外层的按钮节点上 */
+    private fun sendButton(enabled: Boolean) = By.pkg(PACKAGE).enabled(enabled).hasChild(By.desc(SEND))
+
     /** 上一轮残留的通知栏或下拉面板会盖住界面，每轮开始前收起。 */
     private fun MacrobenchmarkScope.resetSystemUi() {
         device.executeShellCommand("cmd statusbar collapse")
@@ -154,5 +170,8 @@ class ChatBenchmarks {
 
         /** swipe 每步约 5 ms，8 步约 40 ms 划完一段，速度足够触发甩动惯性。 */
         const val FLING_STEPS = 8
+
+        /** 正常 2 秒左右吐完，给慢机留足余量；超时说明回复卡住，本轮作废 */
+        const val STREAM_TIMEOUT_MS = 20_000L
     }
 }
